@@ -49,6 +49,7 @@
 		"vitest": "^3.0.0"
 	},
 	"dependencies": {
-		"@xyflow/svelte": "^1.0.2"
+		"@xyflow/svelte": "^1.0.2",
+		"mode-watcher": "^1.0.7"
 	}
 }
