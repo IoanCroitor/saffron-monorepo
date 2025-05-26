@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { currentUser, isLoggedIn } from '$lib/stores/auth.js';
 
 	// --- Vars from Hero Animation (Component 1) ---
 	let mouseX = 0;
@@ -24,15 +25,7 @@
 		'🌸❋🌺❋🌸'
 	];
 
-	const growthStages = [
-		'🌱',
-		'🌿',
-		'🪴',
-		'🌳',
-		'🌲',
-		'🎋',
-		'🌾'
-	];
+
 
 	interface WindowData {
 		id: string;
@@ -338,8 +331,20 @@
 
     <!-- Main content area for Component 2's elements -->
 	<div class="saffron-main-content">
-        <!-- Left side: Text and CTA content -->
-        <div class="saffron-left-content">
+        <!-- Authentication Welcome Section -->
+        {#if $isLoggedIn && $currentUser}
+            <div class="auth-welcome-banner">
+                <div class="auth-welcome-content">
+                    <span class="auth-welcome-text">Welcome back, <strong>{$currentUser.name}</strong>!</span>
+                    <span class="auth-welcome-subtitle">Ready to design some circuits?</span>
+                </div>
+            </div>
+        {/if}
+        
+        <!-- Content wrapper for main layout -->
+        <div class="saffron-content-wrapper">
+            <!-- Left side: Text and CTA content -->
+            <div class="saffron-left-content">
             <div class="saffron-hero-text-area">
                 <h1 class="saffron-headline">
                     <span class="saffron-headline-brand">Saffron</span>
@@ -350,9 +355,15 @@
                 <p class="saffron-tagline">
                     The collaborative SPICE environment, beautifully executed.
                 </p>
-                <button class="saffron-cta-button-main">
-                    <span>> Launch Saffron_Beta</span>
-                </button>
+                {#if $isLoggedIn}
+                    <button class="saffron-cta-button-main" on:click={() => window.location.href = '/dashboard'}>
+                        <span>> Open Dashboard</span>
+                    </button>
+                {:else}
+                    <button class="saffron-cta-button-main" on:click={() => window.location.href = '/login'}>
+                        <span>> Launch Saffron_Beta</span>
+                    </button>
+                {/if}
             </div>
             
 
@@ -446,6 +457,7 @@
         {/each}
         </div>
 	</div>
+    </div> <!-- End of saffron-content-wrapper -->
     
     <!-- Mobile Info Panel (shown only on mobile) -->
     <div class="mobile-info-panel">
@@ -660,14 +672,73 @@
 		max-width: none;  /* Remove width constraint */
 		max-height: none; /* Remove height constraint */
 		display: flex;
-		flex-direction: row; /* Horizontal layout: left text, right windows */
+		flex-direction: column; /* Stack auth banner on top */
 		align-items: center;
-		justify-content: space-between; /* Space between left and right content */
+		justify-content: center; /* Center vertically */
 		padding: 2rem 3rem; /* Increased horizontal padding for better margins */
 		margin: 0 auto; /* Center the content */
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
         overflow: hidden; /* Terminals are positioned absolutely within this */
 	}
+
+    /* Authentication Welcome Banner */
+    .auth-welcome-banner {
+        position: absolute;
+        top: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        width: auto;
+        max-width: 600px;
+        z-index: 30;
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+        padding: 1rem 2rem;
+        backdrop-filter: blur(10px);
+        animation: welcomeBannerSlide 0.5s ease-out;
+    }
+
+    .auth-welcome-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.25rem;
+    }
+
+    .auth-welcome-text {
+        color: var(--gray-light);
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+
+    .auth-welcome-subtitle {
+        color: var(--purple-primary);
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    @keyframes welcomeBannerSlide {
+        from {
+            transform: translateX(-50%) translateY(-20px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    }
+
+    /* Content area wrapper for main content */
+    .saffron-content-wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        height: 100%;
+        margin-top: 0;
+    }
 
     /* Left side content area */
     .saffron-left-content {

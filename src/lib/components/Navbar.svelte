@@ -1,39 +1,29 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Menu, User, LogIn, UserPlus, ChevronDown } from '@lucide/svelte';
+	import { Menu, User, LogIn, UserPlus, ChevronDown, LogOut, Settings } from '@lucide/svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import ThemeToggle from './ThemeToggle.svelte';
+	import { currentUser, isLoggedIn, logout } from '$lib/stores/auth.js';
+	import { goto } from '$app/navigation';
 
-	// Mock user state - replace with your actual auth logic
-	let isLoggedIn = false;
-	let user = { name: 'John Doe', email: 'john@example.com' };
-	let showUserMenu = false;
 	let showMobileMenu = false;
 
 	function handleLogin() {
-		// Replace with your login logic
-		console.log('Login clicked');
+		goto('/login');
 	}
 
 	function handleSignUp() {
-		// Replace with your sign up logic
-		console.log('Sign up clicked');
+		goto('/signup');
 	}
 
-	function handleLogout() {
-		// Replace with your logout logic
-		console.log('Logout clicked');
-		isLoggedIn = false;
-		showUserMenu = false;
+	async function handleLogout() {
+		await logout();
+		// No need to call goto('/') as the server will redirect
 	}
 
 	function handleProfile() {
 		// Replace with your profile logic
 		console.log('Profile clicked');
-		showUserMenu = false;
-	}
-
-	function toggleUserMenu() {
-		showUserMenu = !showUserMenu;
 	}
 
 	function toggleMobileMenu() {
@@ -43,8 +33,7 @@
 	// Close menus when clicking outside
 	function handleClickOutside(event: MouseEvent) {
 		const target = event.target as Element;
-		if (!target.closest('.user-menu') && !target.closest('.mobile-menu')) {
-			showUserMenu = false;
+		if (!target.closest('.mobile-menu')) {
 			showMobileMenu = false;
 		}
 	}
@@ -78,6 +67,14 @@
 			<a href="/test" class="text-sm font-medium hover:text-primary transition-colors">
 				Test
 			</a>
+			{#if $isLoggedIn}
+				<a href="/projects" class="text-sm font-medium hover:text-primary transition-colors">
+					Projects
+				</a>
+				<a href="/dashboard" class="text-sm font-medium hover:text-primary transition-colors">
+					Dashboard
+				</a>
+			{/if}
 		</div>
 
 		<!-- Auth Buttons -->
@@ -85,52 +82,50 @@
 			<!-- Theme Toggle -->
 			<ThemeToggle />
 			
-			{#if isLoggedIn}
+			{#if $isLoggedIn}
 				<!-- User Dropdown -->
-				<div class="relative user-menu">
-					<Button
-						variant="ghost"
-						size="sm"
-						class="relative h-8 w-8 rounded-full"
-						on:click={toggleUserMenu}
-					>
-						<User class="h-4 w-4" />
-						<span class="sr-only">Open user menu</span>
-					</Button>
-					{#if showUserMenu}
-						<div class="absolute right-0 mt-2 w-56 bg-popover border rounded-md shadow-lg z-50">
-							<div class="px-3 py-2 border-b">
-								<p class="text-sm font-medium leading-none">{user.name}</p>
-								<p class="text-xs leading-none text-muted-foreground mt-1">{user.email}</p>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="relative h-8 w-8 rounded-full"
+						>
+							<User class="h-4 w-4" />
+							<span class="sr-only">Open user menu</span>
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content class="w-56" align="end">
+						<DropdownMenu.Label class="font-normal">
+							<div class="flex flex-col space-y-1">
+								<p class="text-sm font-medium leading-none">{$currentUser?.name}</p>
+								<p class="text-xs leading-none text-muted-foreground">{$currentUser?.email}</p>
 							</div>
-							<div class="py-1">
-								<button
-									class="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center"
-									on:click={handleProfile}
-								>
-									<User class="mr-2 h-4 w-4" />
-									<span>Profile</span>
-								</button>
-								<hr class="my-1" />
-								<button
-									class="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center"
-									on:click={handleLogout}
-								>
-									<LogIn class="mr-2 h-4 w-4" />
-									<span>Log out</span>
-								</button>
-							</div>
-						</div>
-					{/if}
-				</div>
+						</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={handleProfile}>
+							<User class="mr-2 h-4 w-4" />
+							<span>Profile</span>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => goto('/dashboard')}>
+							<Settings class="mr-2 h-4 w-4" />
+							<span>Dashboard</span>
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={handleLogout} class="text-red-600 dark:text-red-400">
+							<LogOut class="mr-2 h-4 w-4" />
+							<span>Log out</span>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			{:else}
 				<!-- Login/Sign Up Buttons -->
 				<div class="hidden sm:flex items-center space-x-2">
-					<Button variant="ghost" size="sm" on:click={handleLogin}>
+					<Button variant="ghost" size="sm" onclick={handleLogin}>
 						<LogIn class="mr-2 h-4 w-4" />
 						Login
 					</Button>
-					<Button size="sm" on:click={handleSignUp}>
+					<Button size="sm" onclick={handleSignUp}>
 						<UserPlus class="mr-2 h-4 w-4" />
 						Sign Up
 					</Button>
@@ -139,7 +134,7 @@
 
 			<!-- Mobile Menu -->
 			<div class="md:hidden relative mobile-menu">
-				<Button variant="ghost" size="sm" on:click={toggleMobileMenu}>
+				<Button variant="ghost" size="sm" onclick={toggleMobileMenu}>
 					<Menu class="h-5 w-5" />
 					<span class="sr-only">Open menu</span>
 				</Button>
@@ -158,18 +153,26 @@
 							<a href="/test" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
 								Test
 							</a>
-							{#if !isLoggedIn}
+							{#if $isLoggedIn}
+								<a href="/projects" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+									Projects
+								</a>
+								<a href="/dashboard" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+									Dashboard
+								</a>
+							{/if}
+							{#if !$isLoggedIn}
 								<hr class="my-1" />
 								<button
 									class="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center"
-									on:click={handleLogin}
+									onclick={handleLogin}
 								>
 									<LogIn class="mr-2 h-4 w-4" />
 									<span>Login</span>
 								</button>
 								<button
 									class="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center"
-									on:click={handleSignUp}
+									onclick={handleSignUp}
 								>
 									<UserPlus class="mr-2 h-4 w-4" />
 									<span>Sign Up</span>
