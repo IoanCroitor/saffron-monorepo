@@ -24,6 +24,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			data: { session }
 		} = await event.locals.supabase.auth.getSession();
 		if (!session) {
+			console.log('No session found in safeGetSession');
 			return { session: null, user: null };
 		}
 
@@ -36,6 +37,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			console.error('Error getting user:', error);
 			return { session: null, user: null };
 		}
+
+		console.log('safeGetSession success:', { userId: user?.id, email: user?.email });
 
 		// Return the authenticated user data from getUser(), not from session
 		return { session, user };

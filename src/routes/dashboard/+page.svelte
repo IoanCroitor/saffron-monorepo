@@ -1,24 +1,44 @@
 <script lang="ts">
-	import { currentUser, isLoggedIn, logout } from '$lib/stores/auth.js';
+	import { currentUser, isLoggedIn, logout, initializeAuth } from '$lib/stores/auth.js';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	
-	// Redirect to login if not authenticated
-	onMount(() => {
-		const unsubscribe = isLoggedIn.subscribe((loggedIn) => {
-			if (!loggedIn) {
-				goto('/login');
-			}
+	let { data } = $props();
+	
+	// Initialize auth state from server data immediately
+	$effect(() => {
+		console.log('Dashboard: Server data check', { 
+			hasSession: !!data.session, 
+			hasUser: !!data.user, 
+			userId: data.user?.id,
+			userEmail: data.user?.email 
 		});
 		
-		return unsubscribe;
+		if (data.session && data.user) {
+			initializeAuth(data.session, data.user);
+		}
+	});
+	
+	// Simple redirect logic - only redirect if we definitively have no auth
+	$effect(() => {
+		console.log('Dashboard: Auth check', { 
+			serverSession: !!data.session, 
+			serverUser: !!data.user, 
+			clientLoggedIn: $isLoggedIn,
+			clientUser: !!$currentUser
+		});
+		
+		// If server says no session and client store also says not logged in
+		if (!data.session && !data.user && !$isLoggedIn) {
+			console.log('Dashboard: Redirecting to login - no auth found');
+			goto('/login');
+		}
 	});
 	
 	async function handleLogout() {
 		await logout();
-		// No need to navigate as the server will redirect
 	}
 </script>
 
@@ -26,12 +46,12 @@
 	<title>Dashboard - Saffron</title>
 </svelte:head>
 
-{#if $isLoggedIn && $currentUser}
+{#if (data.session && data.user) || ($isLoggedIn && $currentUser)}
 	<div class="min-h-screen bg-background">
 		<div class="container mx-auto py-8 px-4">
 			<div class="mb-8">
 				<h1 class="text-3xl font-bold mb-2">Welcome to your Dashboard</h1>
-				<p class="text-muted-foreground">Hello, {$currentUser.name}! You're successfully logged in.</p>
+				<p class="text-muted-foreground">Hello, {$currentUser?.name || data.user?.user_metadata?.name || 'User'}! You're successfully logged in.</p>
 			</div>
 
 			<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -45,15 +65,15 @@
 						<div class="space-y-2">
 							<div>
 								<span class="font-medium">Name:</span>
-								<span class="ml-2">{$currentUser.name}</span>
+								<span class="ml-2">{$currentUser?.name || data.user?.user_metadata?.name || 'User'}</span>
 							</div>
 							<div>
 								<span class="font-medium">Email:</span>
-								<span class="ml-2">{$currentUser.email}</span>
+								<span class="ml-2">{$currentUser?.email || data.user?.email || 'N/A'}</span>
 							</div>
 							<div>
 								<span class="font-medium">User ID:</span>
-								<span class="ml-2 text-sm text-muted-foreground">{$currentUser.id}</span>
+								<span class="ml-2 text-sm text-muted-foreground">{$currentUser?.id || data.user?.id || 'N/A'}</span>
 							</div>
 						</div>
 					</Card.Content>

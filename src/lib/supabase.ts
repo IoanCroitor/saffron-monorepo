@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import { createBrowserClient, createServerClient, isBrowser } from '@supabase/ssr';
 import { type Database } from './types/database.types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
-export const supabase = createClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+// Singleton pattern for browser client to prevent multiple instances
+let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
 export const createSupabaseLoadClient = (fetch: typeof globalThis.fetch) => {
 	return createServerClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
@@ -22,7 +22,17 @@ export const createSupabaseLoadClient = (fetch: typeof globalThis.fetch) => {
 
 export const createSupabaseBrowserClient = () => {
 	if (isBrowser()) {
-		return createBrowserClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+		// Return existing client if already created, otherwise create new one
+		if (!browserClient) {
+			browserClient = createBrowserClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+		}
+		return browserClient;
 	}
-	return supabase;
+	// For SSR, create a basic server client without cookies (will be handled by hooks)
+	return createServerClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+		cookies: {
+			getAll: () => [],
+			setAll: () => {}
+		}
+	});
 };
