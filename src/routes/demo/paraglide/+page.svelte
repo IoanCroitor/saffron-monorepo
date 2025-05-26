@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { setLocale } from '$lib/paraglide/runtime';
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { m } from '$lib/paraglide/messages.js';
+	// Internationalization disabled for speed
+	// import { setLocale } from '$lib/paraglide/runtime';
+	// import { page } from '$app/state';
+	// import { goto } from '$app/navigation';
+	// import { m } from '$lib/paraglide/messages.js';
 </script>
 
-<h1>{m.hello_world({ name: 'SvelteKit User' })}</h1>
+<h1>Hello, SvelteKit User!</h1>
 <div class="bg-gray-100 p-4 rounded-md">
-	<button onclick={() => setLocale('en')}>en</button>
-	<button onclick={() => setLocale('ro-ro')}>ro-ro</button>
+	<p>Internationalization has been disabled for faster development.</p>
 </div>
 <p>
 	If you use VSCode, install the <a

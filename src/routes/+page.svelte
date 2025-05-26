@@ -1,33 +1,313 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	
-	let showHologram = false;
+	import { onMount, onDestroy } from 'svelte';
+
+	// --- Vars from Hero Animation (Component 1) ---
 	let mouseX = 0;
 	let mouseY = 0;
-	let heroElement: HTMLElement;
-	
+	let heroElement: HTMLElement; // Bound to the main .hero-section for mouse tracking
+
+	// --- Vars from Saffron Terminals (Component 2) ---
+	let flowerStage = 0;
+	let animationMode = 'saffron'; // 'saffron' or 'growth'
+	let growthStage = 0;
+	let animationInterval: NodeJS.Timeout;
+	let physicsInterval: NodeJS.Timeout;
+	let containerRef: HTMLElement; // Bound to the container where terminal windows float
+
+	const flowerStages = [
+		'    ',
+		'  . ',
+		' .•.',
+		'.•*•.',
+		'.*❋*.',
+		'*❋🌸❋*',
+		'🌸❋🌺❋🌸'
+	];
+
+	const growthStages = [
+		'🌱',
+		'🌿',
+		'🪴',
+		'🌳',
+		'🌲',
+		'🎋',
+		'🌾'
+	];
+
+	interface WindowData {
+		id: string;
+		x: number;
+		y: number;
+		vx: number;
+		vy: number;
+		width: number;
+		height: number;
+		isDragging: boolean;
+		element?: HTMLElement;
+	}
+
+	let windows: WindowData[] = [
+		{ id: 'bonsai', x: 550, y: 50, vx: 0.2, vy: 0.1, width: 320, height: 280, isDragging: false },
+		{ id: 'schematic', x: 50, y: 400, vx: 0.1, vy: -0.15, width: 288, height: 200, isDragging: false },
+		{ id: 'code', x: 750, y: 350, vx: -0.1, vy: 0.2, width: 320, height: 220, isDragging: false },
+		{ id: 'graph', x: 100, y: 20, vx: 0.15, vy: 0.1, width: 256, height: 200, isDragging: false },
+		{ id: 'status', x: 800, y: 100, vx: -0.2, vy: 0.15, width: 224, height: 160, isDragging: false }
+	];
+    // Positioned further from center with varied initial velocities for wider orbital motion
+
+	// Function to calculate window positions based on container size
+	function calculateWindowPositions() {
+		if (!containerRef) return;
+		
+		const rect = containerRef.getBoundingClientRect();
+		const containerWidth = rect.width;
+		const containerHeight = rect.height;
+		
+		// Right side only positioning
+		const rightSideWidth = containerWidth;
+		const rightSideHeight = containerHeight;
+		
+		// Calculate positions in orbital pattern within the right side
+		windows = windows.map((win, index) => {
+			const angle = (index / windows.length) * 2 * Math.PI;
+			const radius = Math.min(rightSideWidth, rightSideHeight) * 0.3; // 30% of container size
+			
+			// Center of the right side area
+			const centerX = rightSideWidth / 2;
+			const centerY = rightSideHeight / 2;
+			
+			// Calculate orbital position within right side
+			const orbitalX = centerX + Math.cos(angle) * radius;
+			const orbitalY = centerY + Math.sin(angle) * radius;
+			
+			// Ensure windows stay within bounds of right side
+			const x = Math.max(10, Math.min(rightSideWidth - win.width - 10, orbitalX - win.width / 2));
+			const y = Math.max(10, Math.min(rightSideHeight - win.height - 10, orbitalY - win.height / 2));
+			
+			return {
+				...win,
+				x,
+				y
+			};
+		});
+	}
+
+	let dragState = {
+		isDragging: false,
+		startX: 0,
+		startY: 0,
+		windowId: ''
+	};
+
 	onMount(() => {
-		const handleMouseMove = (e: MouseEvent) => {
+		// Logic for Saffron flower animation
+		animationInterval = setInterval(() => {
+			flowerStage = (flowerStage + 1) % flowerStages.length;
+		}, 1500);
+
+		// Calculate initial window positions
+		setTimeout(() => {
+			calculateWindowPositions();
+		}, 100); // Small delay to ensure container is rendered
+
+		// Logic for terminal window physics
+		physicsInterval = setInterval(applyPhysics, 16); // ~60fps
+
+		// Global mouse event listeners for window dragging
+		document.addEventListener('mousemove', handleWindowDragMouseMove);
+		document.addEventListener('mouseup', handleWindowDragMouseUp);
+		
+		// Window resize listener to recalculate positions
+		const handleResize = () => {
+			calculateWindowPositions();
+		};
+		window.addEventListener('resize', handleResize);
+		
+		return () => {
+			clearInterval(animationInterval);
+			clearInterval(physicsInterval);
+			document.removeEventListener('mousemove', handleWindowDragMouseMove);
+			document.removeEventListener('mouseup', handleWindowDragMouseUp);
+			window.removeEventListener('resize', handleResize);
+			// Cleanup for heroElement listener is handled by the reactive block below
+		};
+	});
+
+    // Handle heroElement mouse move listener setup and cleanup
+    let currentMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+    
+    $: if (heroElement && typeof window !== 'undefined') {
+        // Clean up previous listener if it exists
+        if (currentMouseMoveHandler && heroElement) {
+            heroElement.removeEventListener('mousemove', currentMouseMoveHandler);
+        }
+        
+        // Create new handler
+        currentMouseMoveHandler = (e: MouseEvent) => {
 			if (heroElement) {
 				const rect = heroElement.getBoundingClientRect();
 				mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
 				mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
 			}
 		};
+        
+        // Add new listener
+        heroElement.addEventListener('mousemove', currentMouseMoveHandler);
+    }
+    
+    // Cleanup on component destroy
+    onDestroy(() => {
+        if (currentMouseMoveHandler && heroElement) {
+            heroElement.removeEventListener('mousemove', currentMouseMoveHandler);
+        }
+    });
+
+	// --- Functions for Saffron Terminal Windows (Component 2 logic) ---
+	function startDrag(event: MouseEvent, windowId: string) {
+		const window = windows.find(w => w.id === windowId);
+		if (!window) return;
+
+		window.isDragging = true;
+		dragState.isDragging = true;
+		dragState.windowId = windowId;
+		// Calculate startX/Y relative to the window's current position
+		dragState.startX = event.clientX - window.x;
+		dragState.startY = event.clientY - window.y;
 		
-		heroElement?.addEventListener('mousemove', handleMouseMove);
+		window.vx = 0;
+		window.vy = 0;
+	}
+
+	function handleWindowDragMouseMove(event: MouseEvent) {
+		if (!dragState.isDragging) return;
 		
-		return () => {
-			heroElement?.removeEventListener('mousemove', handleMouseMove);
-		};
-	});
+		const currentWindow = windows.find(w => w.id === dragState.windowId);
+		if (!currentWindow) return;
+
+		currentWindow.x = event.clientX - dragState.startX;
+		currentWindow.y = event.clientY - dragState.startY;
+		windows = [...windows]; // Trigger reactivity
+	}
+
+	function handleWindowDragMouseUp() {
+		if (dragState.isDragging) {
+			const currentWindow = windows.find(w => w.id === dragState.windowId);
+			if (currentWindow) {
+				currentWindow.isDragging = false;
+			}
+		}
+		dragState.isDragging = false;
+		dragState.windowId = '';
+	}
+
+	function applyPhysics() {
+		if (!containerRef) return;
+
+		const physicsContainerRect = containerRef.getBoundingClientRect();
+		const centerX = physicsContainerRect.width / 2;
+		const centerY = physicsContainerRect.height / 2;
+		
+		// Check if we're on mobile (simplified check)
+		const isMobile = window.innerWidth <= 768;
+		
+		// If mobile, disable physics and let CSS animations handle movement
+		if (isMobile) {
+			return;
+		}
+		
+		// Define a gentle repulsion area in the center of the right side
+		// to keep windows spread out nicely
+		const repulsionAreaWidth = 200; // Smaller central area in right side
+		const repulsionAreaHeight = 200;
+		const repulsionLeft = centerX - repulsionAreaWidth / 2;
+		const repulsionRight = centerX + repulsionAreaWidth / 2;
+		const repulsionTop = centerY - repulsionAreaHeight / 2;
+		const repulsionBottom = centerY + repulsionAreaHeight / 2;
+		const repulsionZone = 50; // Margin around repulsion area
+
+		windows = windows.map(win => {
+			if (win.isDragging) return win;
+
+			const winCenterX = win.x + win.width / 2;
+			const winCenterY = win.y + win.height / 2;
+
+			// Check if window overlaps with central repulsion area
+			const overlapsRepulsion = winCenterX > repulsionLeft - repulsionZone && 
+									winCenterX < repulsionRight + repulsionZone &&
+									winCenterY > repulsionTop - repulsionZone && 
+									winCenterY < repulsionBottom + repulsionZone;
+
+			if (overlapsRepulsion) {
+				// Gentle repulsion away from center of right side
+				const dx = winCenterX - centerX;
+				const dy = winCenterY - centerY;
+				const distance = Math.sqrt(dx * dx + dy * dy);
+				
+				if (distance > 1) {
+					const repulsionForce = 0.0008; // Gentler repulsion force
+					win.vx += (dx / distance) * repulsionForce;
+					win.vy += (dy / distance) * repulsionForce;
+				}
+			} else {
+				// Gentle orbital force around the center of the right side
+				const dx = centerX - winCenterX;
+				const dy = centerY - winCenterY;
+				const distance = Math.sqrt(dx * dx + dy * dy);
+				
+				if (distance > 1) {
+					const orbitalRadius = 300; // Orbital distance in right side
+					const distanceFromIdeal = Math.abs(distance - orbitalRadius);
+					
+					// Radial force (toward/away from center to maintain orbital distance)
+					const radialForce = distance < orbitalRadius ? -0.00008 : 0.00008;
+					const radialMultiplier = Math.min(distanceFromIdeal / 100, 1);
+					
+					win.vx += (dx / distance) * radialForce * radialMultiplier;
+					win.vy += (dy / distance) * radialForce * radialMultiplier;
+					
+					// Tangential force for orbital motion
+					const tangentialForce = 0.00015;
+					win.vx += (-dy / distance) * tangentialForce;
+					win.vy += (dx / distance) * tangentialForce;
+				}
+			}
+
+			// Apply damping
+			win.vx *= 0.98; // Smooth motion
+			win.vy *= 0.98;
+
+			// Update position
+			win.x += win.vx;
+			win.y += win.vy;
+
+			// Boundary collision with bounce within right side area
+			const margin = 5; 
+			if (win.x < margin) {
+				win.x = margin;
+				win.vx *= -0.4;
+			}
+			if (win.x + win.width > physicsContainerRect.width - margin) {
+				win.x = physicsContainerRect.width - win.width - margin;
+				win.vx *= -0.4;
+			}
+			if (win.y < margin) {
+				win.y = margin;
+				win.vy *= -0.4;
+			}
+			if (win.y + win.height > physicsContainerRect.height - margin) {
+				win.y = physicsContainerRect.height - win.height - margin;
+				win.vy *= -0.4;
+			}
+			return win;
+		});
+	}
 </script>
 
+<!-- Base layout from Component 1's .hero-section -->
 <div class="hero-section" bind:this={heroElement}>
+	<!-- Background visual elements from Component 1 -->
 	<div class="grain-overlay"></div>
 	<div class="ambient-glow"></div>
-	
-	<!-- Floating circuit components for depth -->
 	<div class="floating-components">
 		{#each Array(12) as _, i}
 			<div class="floating-component component-{(i % 6) + 1}" 
@@ -35,253 +315,161 @@
 			</div>
 		{/each}
 	</div>
-	
-	<!-- Background circuit traces -->
 	<div class="background-traces">
 		<svg class="bg-circuit" viewBox="0 0 1200 800">
 			<defs>
-				<linearGradient id="bgTraceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+				<linearGradient id="c1_bgTraceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
 					<stop offset="0%" style="stop-color: transparent"/>
 					<stop offset="30%" style="stop-color: rgba(139, 92, 246, 0.1)"/>
 					<stop offset="70%" style="stop-color: rgba(139, 92, 246, 0.05)"/>
 					<stop offset="100%" style="stop-color: transparent"/>
 				</linearGradient>
 			</defs>
-			
 			{#each Array(8) as _, i}
 				<path class="bg-trace trace-bg-{i}" 
 					  d="M{50 + i * 140},{100 + i * 80} Q{300 + i * 100},{200 + i * 60} {600 + i * 80},{150 + i * 90} T{1000 + i * 50},{300 + i * 40}"
-					  stroke="url(#bgTraceGradient)" 
+					  stroke="url(#c1_bgTraceGradient)" 
 					  fill="none" 
 					  stroke-width="1"
 					  style="--trace-delay: {i * 0.5}s"/>
 			{/each}
 		</svg>
 	</div>
-	
-	<div class="content-wrapper">
-		<!-- Central 3D Circuit Element -->
-		<div class="central-3d-container" style="transform: rotateX({mouseY * 5}deg) rotateY({mouseX * 5}deg)">
-			<div class="circuit-core">
-				<!-- Main circuit PCB -->
-				<div class="circuit-board">
-					<!-- Circuit components -->
-					<div class="component resistor resistor-1"></div>
-					<div class="component capacitor capacitor-1"></div>
-					<div class="component ic ic-1"></div>
-					<div class="component transistor transistor-1"></div>
-					<div class="component diode diode-1"></div>
-					
-					<!-- Connection nodes -->
-					<div class="circuit-node node-1"></div>
-					<div class="circuit-node node-2"></div>
-					<div class="circuit-node node-3"></div>
-					<div class="circuit-node node-4"></div>
-					<div class="circuit-node node-5"></div>
-					<div class="circuit-node node-6"></div>
-				</div>
-				
-				<!-- Animated circuit traces -->
-				<svg class="circuit-traces" viewBox="0 0 300 300">
-					<defs>
-						<linearGradient id="traceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-							<stop offset="0%" style="stop-color: transparent"/>
-							<stop offset="20%" style="stop-color: var(--purple-glow); stop-opacity: 0.3"/>
-							<stop offset="50%" style="stop-color: var(--purple-bright); stop-opacity: 1"/>
-							<stop offset="80%" style="stop-color: var(--spectral-cyan); stop-opacity: 0.7"/>
-							<stop offset="100%" style="stop-color: transparent"/>
-						</linearGradient>
-						
-						<linearGradient id="powerTrace" x1="0%" y1="0%" x2="100%" y2="0%">
-							<stop offset="0%" style="stop-color: transparent"/>
-							<stop offset="30%" style="stop-color: var(--spectral-red); stop-opacity: 0.8"/>
-							<stop offset="70%" style="stop-color: var(--spectral-orange); stop-opacity: 1"/>
-							<stop offset="100%" style="stop-color: transparent"/>
-						</linearGradient>
-						
-						<filter id="glow">
-							<feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-							<feMerge> 
-								<feMergeNode in="coloredBlur"/>
-								<feMergeNode in="SourceGraphic"/>
-							</feMerge>
-						</filter>
-					</defs>
-					
-					<!-- Main signal traces -->
-					<path class="trace signal-trace" d="M50,80 L120,80 L120,150 L200,150 L200,220" stroke="url(#traceGradient)" filter="url(#glow)"/>
-					<path class="trace signal-trace" d="M80,50 L80,120 L150,120 L150,190 L220,190" stroke="url(#traceGradient)" filter="url(#glow)"/>
-					<path class="trace signal-trace" d="M250,80 L180,80 L180,150 L120,150" stroke="url(#traceGradient)" filter="url(#glow)"/>
-					
-					<!-- Power traces -->
-					<path class="trace power-trace" d="M20,50 L280,50" stroke="url(#powerTrace)" filter="url(#glow)"/>
-					<path class="trace power-trace" d="M20,250 L280,250" stroke="url(#powerTrace)" filter="url(#glow)"/>
-					
-					<!-- Complex routing -->
-					<path class="trace complex-trace" d="M50,150 Q100,100 150,150 T250,120" stroke="url(#traceGradient)" filter="url(#glow)"/>
-					<path class="trace complex-trace" d="M150,200 Q200,160 250,200 Q220,240 180,220" stroke="url(#traceGradient)" filter="url(#glow)"/>
-				</svg>
-				
-				<!-- Enhanced prismatic effects -->
-				<div class="prism-container">
-					<div class="light-beam beam-1"></div>
-					<div class="light-beam beam-2"></div>
-					<div class="spectral-refraction refraction-1"></div>
-					<div class="spectral-refraction refraction-2"></div>
-					<div class="spectral-refraction refraction-3"></div>
-					<div class="holographic-shimmer"></div>
-				</div>
-				
-				<!-- Central core glow -->
-				<div class="core-glow"></div>
-				<div class="energy-ring"></div>
-			</div>
-		</div>
 
-		<!-- Typography Section -->
-		<div class="hero-text">
-			<h1 class="headline">
-				<span class="headline-word">Saffron</span>
-				<span class="headline-separator">:</span>
-				<span class="headline-tagline">Circuit Simulation, Reimagined</span>
-			</h1>
-			<p class="subheadline">Design. Simulate. Collaborate. Beyond Limits.</p>
-		</div>
+    <!-- Main content area for Component 2's elements -->
+	<div class="saffron-main-content">
+        <!-- Left side: Text and CTA content -->
+        <div class="saffron-left-content">
+            <div class="saffron-hero-text-area">
+                <h1 class="saffron-headline">
+                    <span class="saffron-headline-brand">Saffron</span>
+                </h1>
+                <p class="saffron-subheadline">
+                    Cultivate Your Circuits
+                </p>
+                <p class="saffron-tagline">
+                    The collaborative SPICE environment, beautifully executed.
+                </p>
+                <button class="saffron-cta-button-main">
+                    <span>> Launch Saffron_Beta</span>
+                </button>
+            </div>
+            
 
-		<!-- Interactive Holographic Panels - More Integrated -->
-		<div class="integrated-analysis">
-			<div 
-				class="analysis-trigger"
-				on:mouseenter={() => showHologram = true}
-				on:mouseleave={() => showHologram = false}
-			>
-				<div class="trigger-glow"></div>
-			</div>
-			
-			<!-- Subtle SPICE indicators -->
-			<div class="spice-indicators">
-				<div class="indicator voltage" style="--pos-x: 15%; --pos-y: 25%;">
-					<span class="value">5.0V</span>
-					<div class="indicator-pulse"></div>
-				</div>
-				<div class="indicator current" style="--pos-x: 75%; --pos-y: 35%;">
-					<span class="value">12mA</span>
-					<div class="indicator-pulse"></div>
-				</div>
-				<div class="indicator frequency" style="--pos-x: 45%; --pos-y: 75%;">
-					<span class="value">1kHz</span>
-					<div class="indicator-pulse"></div>
-				</div>
-			</div>
-			
-			<!-- Ambient waveform -->
-			<div class="ambient-waveform">
-				<svg viewBox="0 0 400 100" class="waveform-bg">
-					<defs>
-						<linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-							<stop offset="0%" style="stop-color: transparent"/>
-							<stop offset="30%" style="stop-color: rgba(139, 92, 246, 0.2)"/>
-							<stop offset="70%" style="stop-color: rgba(6, 182, 212, 0.3)"/>
-							<stop offset="100%" style="stop-color: transparent"/>
-						</linearGradient>
-					</defs>
-					<path class="ambient-wave" 
-						  d="M0,50 Q50,20 100,50 T200,30 Q250,60 300,40 T400,50" 
-						  stroke="url(#waveGradient)" 
-						  fill="none"/>
-				</svg>
-			</div>
-		</div>
+        </div>
+        
+        <!-- Right side: Floating windows container -->
+        <div class="saffron-right-content" bind:this={containerRef}>
 
-		<!-- Enhanced Detailed Holographic Projection -->
-		{#if showHologram}
-			<div class="advanced-hologram">
-				<div class="hologram-layers">
-					<div class="layer circuit-analysis">
-						<div class="analysis-header">
-							<span class="status-dot"></span>
-							Circuit Analysis Active
-						</div>
-						<div class="analysis-grid">
-							<div class="analysis-item">
-								<span class="label">Vout</span>
-								<span class="value gradient-text">4.76V</span>
-							</div>
-							<div class="analysis-item">
-								<span class="label">THD</span>
-								<span class="value gradient-text">0.02%</span>
-							</div>
-							<div class="analysis-item">
-								<span class="label">Gain</span>
-								<span class="value gradient-text">23.1dB</span>
-							</div>
-						</div>
-					</div>
-					
-					<div class="layer spice-code">
-						<div class="code-header">SPICE Netlist</div>
-						<div class="code-content">
-							<div class="code-line">
-								<span class="keyword">.MODEL</span>
-								<span class="model">Q2N3904 NPN</span>
-							</div>
-							<div class="code-line">
-								<span class="keyword">V1</span>
-								<span class="node">VCC 0</span>
-								<span class="value">12V</span>
-							</div>
-						</div>
-					</div>
-					
-					<div class="layer frequency-response">
-						<svg viewBox="0 0 200 80" class="response-graph">
-							<defs>
-								<linearGradient id="responseGradient" x1="0%" y1="100%" x2="0%" y2="0%">
-									<stop offset="0%" style="stop-color: var(--purple-glow); stop-opacity: 0"/>
-									<stop offset="50%" style="stop-color: var(--purple-glow); stop-opacity: 0.3"/>
-									<stop offset="100%" style="stop-color: var(--purple-bright); stop-opacity: 1"/>
-								</linearGradient>
-							</defs>
-							<path class="response-curve" 
-								  d="M10,70 Q50,40 100,45 Q150,35 190,40" 
-								  stroke="var(--purple-bright)" 
-								  fill="none"/>
-							<path class="response-fill" 
-								  d="M10,70 Q50,40 100,45 Q150,35 190,40 L190,80 L10,80 Z" 
-								  fill="url(#responseGradient)"/>
-						</svg>
-					</div>
-				</div>
-				<div class="hologram-effects">
-					<div class="scan-line"></div>
-					<div class="data-particles">
-						{#each Array(6) as _, i}
-							<div class="data-particle" style="--particle-delay: {i * 0.3}s"></div>
-						{/each}
-					</div>
-				</div>
-				<div class="hologram-border"></div>
-			</div>
-		{/if}
-
-		<!-- Call to Action -->
-		<a href="/explore" class="cta-button">
-			<span class="cta-text">Explore Saffron</span>
-			<div class="cta-glow"></div>
-		</a>
+		<!-- Floating Terminal Windows from Component 2 -->
+		{#each windows as win (win.id)}
+            <div
+                class="terminal-window"
+                bind:this={win.element}
+                style:left="{win.x}px"
+                style:top="{win.y}px"
+                style:width="{win.width}px"
+                style:height="{win.height}px"
+            >
+                <div
+                    class="terminal-header"
+                    on:mousedown|stopPropagation={(e) => startDrag(e, win.id)}
+                >
+                    {#if win.id === 'bonsai'}
+                        <div class="terminal-buttons"><div class="term-btn r"></div><div class="term-btn y"></div><div class="term-btn g"></div></div>
+                        <span class="title-text">Saffron.OS - grow_spice_flower.sh</span>
+                    {:else if win.id === 'schematic'}
+                        <span class="title-text alt">circuit_schematic.sch</span>
+                    {:else if win.id === 'code'}
+                        <span class="title-text alt">filter.cir</span>
+                    {:else if win.id === 'graph'}
+                        <span class="title-text alt">frequency_response.plot</span>
+                    {:else if win.id === 'status'}
+                        <span class="title-text status-header">system_status.log</span>
+                    {/if}
+                </div>
+                <div class="terminal-content">
+                    {#if win.id === 'bonsai'}
+                        <div class="term-text-muted">$ ./cultivate_saffron --bloom</div>
+                        <div class="term-text-success mb-1">Initializing botanical circuit simulation...</div>
+                        <div class="bonsai-flower-display">
+                            <div class="flower-art">
+                                {#if flowerStage < 4}
+                                    <span>{flowerStages[flowerStage]}</span>
+                                {:else if flowerStage === 4}
+                                    <span>.*</span><span class="flower-red">❋</span><span>*.</span>
+                                {:else if flowerStage === 5}
+                                    <span>*</span><span class="flower-red">❋</span><span class="flower-yellow">🌸</span><span class="flower-red">❋</span><span>*</span>
+                                {:else}
+                                    <span class="flower-yellow">🌸</span><span class="flower-red">❋</span><span class="flower-main">🌺</span><span class="flower-red">❋</span><span class="flower-yellow">🌸</span>
+                                {/if}
+                            </div>
+                            <div class="term-text-faded mt-1">stigma_count: {flowerStage > 3 ? '3' : '0'} | precision: high</div>
+                        </div>
+                        <div class="term-text-accent">> Saffron cultivation complete</div>
+                    {:else if win.id === 'schematic'}
+                        <div class="term-text-muted mb-1">// RC Low-Pass Filter</div>
+                        <svg width="100%" height="100" viewBox="0 0 200 100" class="schematic-svg">
+                            <path d="M20 50 L40 50 L45 40 L55 60 L65 40 L75 60 L85 40 L95 50 L115 50" class="schematic-trace"/>
+                            <text x="67" y="75" class="schematic-label">R1</text>
+                            <line x1="115" y1="50" x2="135" y2="50" class="schematic-trace"/><line x1="135" y1="35" x2="135" y2="65" class="schematic-trace"/><line x1="140" y1="35" x2="140" y2="65" class="schematic-trace"/><line x1="140" y1="50" x2="160" y2="50" class="schematic-trace"/>
+                            <text x="130" y="85" class="schematic-label">C1</text>
+                            <line x1="160" y1="50" x2="160" y2="70" class="schematic-trace"/><line x1="150" y1="70" x2="170" y2="70" class="schematic-trace"/>
+                        </svg>
+                    {:else if win.id === 'code'}
+                        <div class="term-text-muted">* RC Low-Pass Filter</div>
+                        <div class="term-text-bright">V1 N001 0 AC 1 0</div>
+                        <div class="term-text-accent">R1 N001 N002 1K</div>
+                        <div class="term-text-accent">C1 N002 0 100nF</div>
+                        <div class="term-text-muted">.AC DEC 100 1 1MEG</div>
+                        <div class="term-text-success">.END</div>
+                        <div class="term-text-warning mt-1">> Simulation ready</div>
+                    {:else if win.id === 'graph'}
+                        <svg width="100%" height="100%" viewBox="0 0 200 120" class="graph-svg">
+                            <defs><pattern id="c2_graph_grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" class="graph-grid-line"/></pattern></defs>
+                            <rect width="200" height="120" fill="url(#c2_graph_grid)"/>
+                            <line x1="20" y1="100" x2="180" y2="100" class="graph-axis-line"/><line x1="20" y1="20" x2="20" y2="100" class="graph-axis-line"/>
+                            <path d="M20 30 Q60 30 100 50 Q140 70 180 90" stroke="url(#c2_graph_rainbow)" class="graph-curve-line"/>
+                            <defs><linearGradient id="c2_graph_rainbow" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" class="rainbow-stop1"/><stop offset="50%" class="rainbow-stop2"/><stop offset="100%" class="rainbow-stop3"/></linearGradient></defs>
+                            <text x="100" y="115" class="graph-label">Frequency (Hz)</text>
+                            <text x="10" y="60" class="graph-label" transform="rotate(-90 10 60)">Gain (dB)</text>
+                        </svg>
+                    {:else if win.id === 'status'}
+                        <div class="term-text-success">● SPICE Engine: Online</div>
+                        <div class="term-text-success">● Collaboration: Active</div>
+                        <div class="term-text-warning">● Synthesis: Running</div>
+                        <div class="term-text-accent">● Saffron Growth: 100%</div>
+                        <div class="term-text-muted mt-1">Users online: 1,247</div>
+                    {/if}
+                </div>
+            </div>
+        {/each}
+        </div>
 	</div>
+    
+    <!-- Mobile Info Panel (shown only on mobile) -->
+    <div class="mobile-info-panel">
+        <div class="term-text-accent mb-2">⚡ Saffron Features</div>
+        <div class="term-text-success">● SPICE Engine: Active</div>
+        <div class="term-text-success">● Circuit Simulator: Ready</div>
+        <div class="term-text-warning">● Collaboration Tools: Available</div>
+        <div class="term-text-muted mt-2 text-xs">Tap "Launch Saffron_Beta" to start designing circuits</div>
+    </div>
 </div>
 
 <style>
+	/* Import Inter font from Google Fonts (from Component 1) */
 	@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-	
+	/* It's often better to include this in your main HTML file or a global CSS file */
+
+	/* CSS Variables from Component 1 */
 	:root {
 		--black-void: #000000;
 		--black-deep: #0d0d0d;
 		--black-surface: #1a1a1a;
-		--purple-primary: #8B5CF6;
-		--purple-bright: #A855F7;
-		--purple-glow: #8B5CF6;
+		--purple-primary: #8B5CF6; /* Main purple */
+		--purple-bright: #A855F7;  /* Brighter purple */
+		--purple-glow: #8B5CF6;    /* Glow color, same as primary here */
 		--gray-light: #f8fafc;
 		--gray-muted: #64748b;
 		--spectral-red: #ef4444;
@@ -291,1409 +479,559 @@
 		--spectral-cyan: #06b6d4;
 		--spectral-blue: #3b82f6;
 		--spectral-indigo: #6366f1;
-		--spectral-violet: #8b5cf6;
+		--spectral-violet: #8b5cf6; /* Same as primary */
 	}
 
 	* {
 		box-sizing: border-box;
+		margin: 0;
+		padding: 0;
 	}
 
+	/* Fix overscroll behavior to prevent white areas */
+	html, body {
+		background-color: var(--black-deep);
+		overscroll-behavior: none; /* Disable overscroll bounce */
+		overflow-x: hidden; /* Prevent horizontal scroll */
+	}
+
+	/* Ensure the main app container has dark background */
+	:global(#svelte) {
+		background-color: var(--black-deep);
+		min-height: 100vh;
+	}
+
+	/* Dark scrollbar styling for this page */
+	:global(::-webkit-scrollbar) {
+		width: 8px;
+		height: 8px;
+	}
+
+	:global(::-webkit-scrollbar-track) {
+		background: var(--black-deep);
+		border-radius: 4px;
+	}
+
+	:global(::-webkit-scrollbar-thumb) {
+		background: #404040;
+		border-radius: 4px;
+		border: 1px solid #2a2a2a;
+	}
+
+	:global(::-webkit-scrollbar-thumb:hover) {
+		background: #505050;
+	}
+
+	:global(::-webkit-scrollbar-corner) {
+		background: var(--black-deep);
+	}
+
+	/* Firefox scrollbar styling */
+	:global(*) {
+		scrollbar-width: thin;
+		scrollbar-color: #404040 var(--black-deep);
+	}
+
+	/* Styles for .hero-section and its background elements (from Component 1) */
 	.hero-section {
 		min-height: 100vh;
 		background: radial-gradient(ellipse at center, var(--black-deep) 0%, var(--black-void) 70%);
 		color: var(--gray-light);
 		font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-		display: flex;
+		display: flex; /* Will center .saffron-main-content */
 		align-items: center;
 		justify-content: center;
 		position: relative;
-		overflow: hidden;
-		padding: 0;
+		overflow: hidden; /* Important */
 	}
 
 	.grain-overlay {
-		position: absolute;
-		inset: 0;
+		position: absolute; inset: 0; z-index: 1;
 		background-image: 
 			radial-gradient(circle at 25% 25%, rgba(139, 92, 246, 0.1) 0%, transparent 25%),
 			radial-gradient(circle at 75% 75%, rgba(139, 92, 246, 0.05) 0%, transparent 25%),
 			url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E");
-		opacity: 0.02;
-		pointer-events: none;
-		mix-blend-mode: multiply;
-		z-index: 1;
+		opacity: 0.02; pointer-events: none; mix-blend-mode: multiply;
 	}
-
 	.ambient-glow {
-		position: absolute;
-		inset: 0;
+		position: absolute; inset: 0; z-index: 0;
 		background: 
 			radial-gradient(circle at 30% 40%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
 			radial-gradient(circle at 70% 60%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
 		pointer-events: none;
-		z-index: 0;
 	}
-
-	/* Floating Circuit Components */
-	.floating-components {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 2;
-	}
-
+	.floating-components { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 	.floating-component {
-		position: absolute;
-		left: var(--x);
-		top: var(--y);
-		opacity: 0.4;
+		position: absolute; left: var(--x); top: var(--y); opacity: 0.4;
 		animation: componentFloat var(--duration, 25s) infinite linear;
 		animation-delay: var(--delay, 0s);
-		will-change: transform, opacity;
 	}
-
-	.component-1 { /* Resistor */
-		width: 20px;
-		height: 6px;
-		background: linear-gradient(90deg, transparent, var(--purple-glow), transparent);
-		border-radius: 3px;
-		box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
-	}
-
-	.component-2 { /* Capacitor */
-		width: 8px;
-		height: 16px;
-		background: linear-gradient(0deg, transparent, var(--spectral-cyan), transparent);
-		border-radius: 2px;
-		box-shadow: 0 0 6px rgba(6, 182, 212, 0.6);
-	}
-
-	.component-3 { /* IC Package */
-		width: 16px;
-		height: 12px;
-		background: linear-gradient(45deg, var(--black-surface), var(--purple-glow));
-		border: 1px solid rgba(139, 92, 246, 0.3);
-		border-radius: 2px;
-		box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
-	}
-
-	.component-4 { /* Diode */
-		width: 12px;
-		height: 4px;
-		background: linear-gradient(90deg, var(--spectral-green), var(--spectral-yellow));
-		border-radius: 2px;
-		box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
-	}
-
-	.component-5 { /* Transistor */
-		width: 10px;
-		height: 10px;
-		background: radial-gradient(circle, var(--purple-bright), var(--purple-glow));
-		border-radius: 50%;
-		box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
-	}
-
-	.component-6 { /* Inductor */
-		width: 18px;
-		height: 8px;
-		background: linear-gradient(90deg, var(--spectral-orange), var(--spectral-red));
-		border-radius: 4px;
-		box-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
-	}
-
-	/* Background Circuit Traces */
-	.background-traces {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 1;
-		opacity: 0.3;
-	}
-
-	.bg-circuit {
-		width: 100%;
-		height: 100%;
-	}
-
+	.component-1 { width: 20px; height: 6px; background: linear-gradient(90deg, transparent, var(--purple-glow), transparent); border-radius: 3px; box-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
+	.component-2 { width: 8px; height: 16px; background: linear-gradient(0deg, transparent, var(--spectral-cyan), transparent); border-radius: 2px; box-shadow: 0 0 6px rgba(6, 182, 212, 0.6); }
+	.component-3 { width: 16px; height: 12px; background: linear-gradient(45deg, var(--black-surface), var(--purple-glow)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 2px; box-shadow: 0 0 10px rgba(139, 92, 246, 0.4); }
+	.component-4 { width: 12px; height: 4px; background: linear-gradient(90deg, var(--spectral-green), var(--spectral-yellow)); border-radius: 2px; box-shadow: 0 0 6px rgba(34, 197, 94, 0.5); }
+	.component-5 { width: 10px; height: 10px; background: radial-gradient(circle, var(--purple-bright), var(--purple-glow)); border-radius: 50%; box-shadow: 0 0 8px rgba(168, 85, 247, 0.6); }
+	.component-6 { width: 18px; height: 8px; background: linear-gradient(90deg, var(--spectral-orange), var(--spectral-red)); border-radius: 4px; box-shadow: 0 0 8px rgba(249, 115, 22, 0.5); }
+	.background-traces { position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0.3; }
+	.bg-circuit { width: 100%; height: 100%; }
 	.bg-trace {
-		stroke-dasharray: 500;
-		stroke-dashoffset: 500;
+		stroke-dasharray: 500; stroke-dashoffset: 500;
 		animation: bgTraceFlow 15s ease-in-out infinite;
 		animation-delay: var(--trace-delay, 0s);
 	}
 
-	.particle-field {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 1;
-	}
-
-	.particle {
-		position: absolute;
-		width: 2px;
-		height: 2px;
-		background: var(--purple-glow);
-		border-radius: 50%;
-		opacity: 0.3;
-		animation: float var(--duration, 20s) infinite linear;
-		animation-delay: var(--delay, 0s);
-		box-shadow: 0 0 6px var(--purple-glow);
-		left: calc(var(--delay) * 2%);
-		top: calc(var(--delay) * 1.5%);
-	}
-
-	@keyframes componentFloat {
-		0% { 
-			transform: translate3d(0, 0, 0) rotate(0deg) scale(0.8);
-			opacity: 0.2;
-		}
-		25% {
-			transform: translate3d(20px, -30px, 10px) rotate(90deg) scale(1);
-			opacity: 0.6;
-		}
-		50% {
-			transform: translate3d(-10px, -60px, 20px) rotate(180deg) scale(0.9);
-			opacity: 0.4;
-		}
-		75% {
-			transform: translate3d(-30px, -30px, 10px) rotate(270deg) scale(1.1);
-			opacity: 0.7;
-		}
-		100% { 
-			transform: translate3d(0, 0, 0) rotate(360deg) scale(0.8);
-			opacity: 0.2;
-		}
-	}
-
-	@keyframes bgTraceFlow {
-		0% { 
-			stroke-dashoffset: 500; 
-			opacity: 0.1;
-		}
-		20% {
-			opacity: 0.3;
-		}
-		50% { 
-			stroke-dashoffset: 0; 
-			opacity: 0.6;
-		}
-		80% {
-			opacity: 0.3;
-		}
-		100% { 
-			stroke-dashoffset: -500; 
-			opacity: 0.1;
-		}
-	}
-
-	@keyframes float {
-		0% { 
-			transform: translate3d(0, 100vh, 0) scale(0);
-			opacity: 0;
-		}
-		10% {
-			opacity: 0.3;
-			transform: translate3d(10px, 90vh, 0) scale(1);
-		}
-		90% {
-			opacity: 0.3;
-			transform: translate3d(-10px, 10vh, 0) scale(1);
-		}
-		100% { 
-			transform: translate3d(0, -10vh, 0) scale(0);
-			opacity: 0;
-		}
-	}
-
-	.content-wrapper {
-		position: relative;
-		z-index: 10;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		max-width: 1200px;
-		padding: 2rem;
-		gap: 4rem;
-	}
-
-	/* Central 3D Circuit Element */
-	.central-3d-container {
-		perspective: 1000px;
-		transform-style: preserve-3d;
-		transition: transform 0.1s ease-out;
-		will-change: transform;
-	}
-
-	.circuit-core {
-		position: relative;
-		width: 300px;
-		height: 300px;
-		transform-style: preserve-3d;
-		animation: coreRotate 40s linear infinite;
-		will-change: transform;
-	}
-
-	.circuit-board {
-		position: absolute;
-		inset: 0;
-		border-radius: 20px;
-		background: 
-			linear-gradient(135deg, 
-				rgba(13, 13, 13, 0.95) 0%, 
-				rgba(26, 26, 26, 0.9) 30%,
-				rgba(13, 13, 13, 0.95) 70%,
-				rgba(0, 0, 0, 0.98) 100%
-			);
-		backdrop-filter: blur(20px);
-		border: 1px solid rgba(139, 92, 246, 0.2);
-		box-shadow: 
-			0 0 60px rgba(139, 92, 246, 0.3),
-			inset 0 0 60px rgba(139, 92, 246, 0.1),
-			inset 0 0 20px rgba(0, 0, 0, 0.5);
-	}
-
-	/* Circuit Components */
+	/* Styles for Circuit Components */
 	.component {
-		position: absolute;
-		border: 1px solid rgba(139, 92, 246, 0.4);
+		position: absolute; border: 1px solid rgba(139, 92, 246, 0.4);
 		box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
 		animation: componentGlow 3s ease-in-out infinite;
 	}
-
-	@keyframes componentGlow {
-		0%, 100% { 
-			box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
-			border-color: rgba(139, 92, 246, 0.4);
-		}
-		50% { 
-			box-shadow: 0 0 25px rgba(139, 92, 246, 0.6), 0 0 40px rgba(139, 92, 246, 0.3);
-			border-color: rgba(139, 92, 246, 0.8);
-		}
-	}
-
-	.resistor {
-		width: 24px;
-		height: 8px;
-		background: linear-gradient(90deg, 
-			var(--spectral-yellow), 
-			var(--spectral-orange), 
-			var(--spectral-red),
-			var(--spectral-orange),
-			var(--spectral-yellow)
-		);
-		border-radius: 4px;
-	}
+	.resistor { width: 24px; height: 8px; background: linear-gradient(90deg, var(--spectral-yellow), var(--spectral-orange), var(--spectral-red), var(--spectral-orange), var(--spectral-yellow)); border-radius: 4px; }
 	.resistor-1 { top: 25%; left: 20%; animation-delay: 0s; }
-
-	.capacitor {
-		width: 12px;
-		height: 20px;
-		background: linear-gradient(0deg, var(--spectral-cyan), var(--spectral-blue));
-		border-radius: 2px;
-	}
+	.capacitor { width: 12px; height: 20px; background: linear-gradient(0deg, var(--spectral-cyan), var(--spectral-blue)); border-radius: 2px; }
 	.capacitor-1 { top: 60%; left: 70%; animation-delay: 0.8s; }
-
-	.ic {
-		width: 32px;
-		height: 20px;
-		background: linear-gradient(45deg, var(--black-surface), rgba(139, 92, 246, 0.2));
-		border-radius: 4px;
-		border: 2px solid rgba(139, 92, 246, 0.6);
-	}
+	.ic { width: 32px; height: 20px; background: linear-gradient(45deg, var(--black-surface), rgba(139, 92, 246, 0.2)); border-radius: 4px; border: 2px solid rgba(139, 92, 246, 0.6); }
 	.ic-1 { top: 40%; left: 40%; transform: translate(-50%, -50%); animation-delay: 1.2s; }
-
-	.transistor {
-		width: 16px;
-		height: 16px;
-		background: radial-gradient(circle, var(--purple-bright), var(--purple-glow));
-		border-radius: 50%;
-		border: 1px solid rgba(168, 85, 247, 0.8);
-	}
+	.transistor { width: 16px; height: 16px; background: radial-gradient(circle, var(--purple-bright), var(--purple-glow)); border-radius: 50%; border: 1px solid rgba(168, 85, 247, 0.8); }
 	.transistor-1 { top: 70%; left: 25%; animation-delay: 1.6s; }
-
-	.diode {
-		width: 20px;
-		height: 6px;
-		background: linear-gradient(90deg, var(--spectral-green), var(--spectral-yellow));
-		border-radius: 3px;
-		position: relative;
-	}
-	.diode::after {
-		content: '';
-		position: absolute;
-		right: -2px;
-		top: -2px;
-		width: 10px;
-		height: 10px;
-		border-right: 2px solid var(--spectral-green);
-		border-top: 2px solid var(--spectral-green);
-		transform: rotate(45deg);
-	}
+	.diode { width: 20px; height: 6px; background: linear-gradient(90deg, var(--spectral-green), var(--spectral-yellow)); border-radius: 3px; position: relative; }
+	.diode::after { content: ''; position: absolute; right: -2px; top: -2px; width: 10px; height: 10px; border-right: 2px solid var(--spectral-green); border-top: 2px solid var(--spectral-green); transform: rotate(45deg); }
 	.diode-1 { top: 20%; right: 25%; animation-delay: 2s; }
-
 	.circuit-node {
-		position: absolute;
-		width: 12px;
-		height: 12px;
-		background: var(--purple-bright);
-		border-radius: 50%;
-		box-shadow: 
-			0 0 20px var(--purple-glow),
-			0 0 40px var(--purple-glow);
+		position: absolute; width: 12px; height: 12px; background: var(--purple-bright);
+		border-radius: 50%; box-shadow: 0 0 20px var(--purple-glow), 0 0 40px var(--purple-glow);
 		animation: nodePulse 3s ease-in-out infinite;
 	}
-
-	.node-1 { top: 20%; left: 20%; animation-delay: 0s; }
-	.node-2 { top: 20%; right: 20%; animation-delay: 0.6s; }
-	.node-3 { bottom: 20%; left: 20%; animation-delay: 1.2s; }
-	.node-4 { bottom: 20%; right: 20%; animation-delay: 1.8s; }
+	.node-1 { top: 20%; left: 20%; animation-delay: 0s; } .node-2 { top: 20%; right: 20%; animation-delay: 0.6s; }
+	.node-3 { bottom: 20%; left: 20%; animation-delay: 1.2s; } .node-4 { bottom: 20%; right: 20%; animation-delay: 1.8s; }
 	.node-5 { top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: 2.4s; }
-
-	.circuit-traces {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-
+	.circuit-traces { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 	.trace {
-		fill: none;
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-		stroke-dasharray: 300;
-		stroke-dashoffset: 300;
+		fill: none; stroke-width: 2; stroke-linecap: round;
+		stroke-dasharray: 300; stroke-dashoffset: 300;
 		animation: traceAnimate 6s ease-in-out infinite;
-		filter: drop-shadow(0 0 3px currentColor);
 	}
-
-	.trace.signal-trace {
-		animation-duration: 8s;
-	}
-
-	.trace.power-trace {
-		stroke-width: 3;
-		animation-duration: 10s;
-	}
-
-	.trace.complex-trace {
-		stroke-width: 1.5;
-		animation-duration: 12s;
-	}
-
-	.signal-trace:nth-child(1) { animation-delay: 0s; }
-	.signal-trace:nth-child(2) { animation-delay: 2.7s; }
-	.signal-trace:nth-child(3) { animation-delay: 5.3s; }
-
-	.power-trace:nth-child(1) { animation-delay: 1.5s; }
-	.power-trace:nth-child(2) { animation-delay: 6s; }
-
-	.complex-trace:nth-child(1) { animation-delay: 3s; }
-	.complex-trace:nth-child(2) { animation-delay: 8s; }
-
-	.prism-container {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		overflow: hidden;
-	}
-
+	.prism-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 	.light-beam {
-		position: absolute;
-		background: linear-gradient(90deg, 
-			transparent 0%,
-			rgba(139, 92, 246, 0.8) 50%,
-			transparent 100%
-		);
-		transform-origin: center;
-		opacity: 0.6;
-		animation: beamSweep 8s ease-in-out infinite;
+		position: absolute; background: linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.8) 50%, transparent 100%);
+		transform-origin: center; opacity: 0.6; animation: beamSweep 8s ease-in-out infinite;
 	}
-
-	.beam-1 {
-		top: 30%;
-		left: 0;
-		width: 100%;
-		height: 2px;
-		animation-delay: 0s;
-	}
-
-	.beam-2 {
-		top: 0;
-		left: 50%;
-		width: 2px;
-		height: 100%;
-		animation-delay: 2.6s;
-	}
-
-	.spectral-refraction {
-		position: absolute;
-		height: 1px;
-		opacity: 0;
-		animation: spectralSweep 12s ease-in-out infinite;
-		filter: blur(0.5px);
-	}
-
-	.refraction-1 {
-		top: 25%;
-		left: 20%;
-		width: 60%;
-		background: linear-gradient(90deg, 
-			var(--spectral-red), var(--spectral-orange), var(--spectral-yellow), 
-			var(--spectral-green), var(--spectral-cyan), var(--spectral-blue)
-		);
-		animation-delay: 1s;
-	}
-
-	.refraction-2 {
-		top: 50%;
-		left: 10%;
-		width: 80%;
-		background: linear-gradient(90deg,
-			var(--spectral-violet), var(--spectral-indigo), var(--spectral-blue),
-			var(--spectral-cyan), var(--spectral-green), var(--spectral-yellow)
-		);
-		animation-delay: 5s;
-	}
-
-	.refraction-3 {
-		top: 75%;
-		left: 30%;
-		width: 40%;
-		background: linear-gradient(90deg,
-			var(--spectral-orange), var(--spectral-yellow), var(--spectral-green),
-			var(--spectral-cyan), var(--spectral-blue), var(--spectral-violet)
-		);
-		animation-delay: 9s;
-	}
-
+	.beam-1 { top: 30%; left: 0; width: 100%; height: 2px; animation-delay: 0s; }
+	.beam-2 { top: 0; left: 50%; width: 2px; height: 100%; animation-delay: 2.6s; }
+	.spectral-refraction { position: absolute; height: 1px; opacity: 0; animation: spectralSweep 12s ease-in-out infinite; filter: blur(0.5px); }
+	.refraction-1 { top: 25%; left: 20%; width: 60%; background: linear-gradient(90deg, var(--spectral-red), var(--spectral-orange), var(--spectral-yellow), var(--spectral-green), var(--spectral-cyan), var(--spectral-blue)); animation-delay: 1s; }
+	.refraction-2 { top: 50%; left: 10%; width: 80%; background: linear-gradient(90deg, var(--spectral-violet), var(--spectral-indigo), var(--spectral-blue), var(--spectral-cyan), var(--spectral-green), var(--spectral-yellow)); animation-delay: 5s; }
+	.refraction-3 { top: 75%; left: 30%; width: 40%; background: linear-gradient(90deg, var(--spectral-orange), var(--spectral-yellow), var(--spectral-green), var(--spectral-cyan), var(--spectral-blue), var(--spectral-violet)); animation-delay: 9s; }
 	.holographic-shimmer {
-		position: absolute;
-		inset: 0;
-		background: 
-			linear-gradient(45deg, transparent 30%, rgba(139, 92, 246, 0.1) 50%, transparent 70%),
-			linear-gradient(-45deg, transparent 30%, rgba(168, 85, 247, 0.1) 50%, transparent 70%);
-		background-size: 200% 200%;
-		animation: shimmerMove 8s ease-in-out infinite;
-		border-radius: 20px;
+		position: absolute; inset: 0; border-radius: 20px;
+		background: linear-gradient(45deg, transparent 30%, rgba(139,92,246,0.1) 50%, transparent 70%), linear-gradient(-45deg, transparent 30%, rgba(168,85,247,0.1) 50%, transparent 70%);
+		background-size: 200% 200%; animation: shimmerMove 8s ease-in-out infinite;
 	}
-
-	@keyframes shimmerMove {
-		0%, 100% {
-			background-position: 0% 0%, 100% 100%;
-			opacity: 0.3;
-		}
-		50% {
-			background-position: 100% 100%, 0% 0%;
-			opacity: 0.7;
-		}
-	}
-
 	.energy-ring {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 150%;
-		height: 150%;
-		border: 1px solid rgba(139, 92, 246, 0.2);
-		border-radius: 50%;
-		transform: translate(-50%, -50%);
-		animation: ringPulse 6s ease-in-out infinite;
+		position: absolute; top: 50%; left: 50%; width: 150%; height: 150%;
+		border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 50%;
+		transform: translate(-50%, -50%); animation: ringPulse 6s ease-in-out infinite;
 	}
-
-	@keyframes ringPulse {
-		0%, 100% {
-			transform: translate(-50%, -50%) scale(1) rotate(0deg);
-			border-color: rgba(139, 92, 246, 0.2);
-		}
-		50% {
-			transform: translate(-50%, -50%) scale(1.1) rotate(180deg);
-			border-color: rgba(139, 92, 246, 0.5);
-		}
-	}
-
 	.core-glow {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 200%;
-		height: 200%;
-		background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
-		transform: translate(-50%, -50%);
-		filter: blur(40px);
+		position: absolute; top: 50%; left: 50%; width: 200%; height: 200%;
+		background: radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%);
+		transform: translate(-50%, -50%); filter: blur(40px);
 		animation: coreGlowPulse 6s ease-in-out infinite;
 	}
 
-	/* Typography */
-	.hero-text {
-		z-index: 20;
-	}
+	/* Keyframes from Component 1 */
+	@keyframes componentFloat { 0% { transform: translate3d(0,0,0) rotate(0deg) scale(0.8); opacity: 0.2; } 25% { transform: translate3d(20px,-30px,10px) rotate(90deg) scale(1); opacity: 0.6; } 50% { transform: translate3d(-10px,-60px,20px) rotate(180deg) scale(0.9); opacity: 0.4; } 75% { transform: translate3d(-30px,-30px,10px) rotate(270deg) scale(1.1); opacity: 0.7; } 100% { transform: translate3d(0,0,0) rotate(360deg) scale(0.8); opacity: 0.2; } }
+	@keyframes bgTraceFlow { 0% { stroke-dashoffset: 500; opacity: 0.1; } 20% { opacity: 0.3; } 50% { stroke-dashoffset: 0; opacity: 0.6; } 80% { opacity: 0.3; } 100% { stroke-dashoffset: -500; opacity: 0.1; } }
+	@keyframes componentGlow { 0%,100% { box-shadow: 0 0 15px rgba(139,92,246,0.3); border-color: rgba(139,92,246,0.4); } 50% { box-shadow: 0 0 25px rgba(139,92,246,0.6), 0 0 40px rgba(139,92,246,0.3); border-color: rgba(139,92,246,0.8); } }
+	@keyframes nodePulse { 0%,100% { transform: scale(1); box-shadow: 0 0 20px var(--purple-glow), 0 0 40px var(--purple-glow); } 50% { transform: scale(1.2); box-shadow: 0 0 30px var(--purple-glow), 0 0 60px var(--purple-glow); } }
+	@keyframes traceAnimate { 0% { stroke-dashoffset: 300; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+	@keyframes beamSweep { 0%,100% { opacity: 0; transform: scaleX(0); } 50% { opacity: 0.6; transform: scaleX(1); } }
+	@keyframes spectralSweep { 0%,85%,100% { opacity: 0; transform: scaleX(0) translateX(-50px); } 15%,70% { opacity: 0.9; transform: scaleX(1) translateX(0); } 50% { opacity: 1; transform: scaleX(1.1) translateX(10px); } }
+	@keyframes shimmerMove { 0%,100% { background-position: 0% 0%, 100% 100%; opacity: 0.3; } 50% { background-position: 100% 100%, 0% 0%; opacity: 0.7; } }
+	@keyframes ringPulse { 0%,100% { transform: translate(-50%,-50%) scale(1) rotate(0deg); border-color: rgba(139,92,246,0.2); } 50% { transform: translate(-50%,-50%) scale(1.1) rotate(180deg); border-color: rgba(139,92,246,0.5); } }
+	@keyframes coreGlowPulse { 0%,100% { opacity: 0.4; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 0.6; transform: translate(-50%,-50%) scale(1.1); } }
 
-	.headline {
-		font-size: clamp(3rem, 8vw, 5.5rem);
-		font-weight: 800;
-		line-height: 1.1;
-		margin: 0;
-		letter-spacing: -0.025em;
-		background: linear-gradient(135deg, 
-			var(--gray-light) 0%, 
-			rgba(139, 92, 246, 0.9) 50%,
-			var(--gray-light) 100%
-		);
-		background-clip: text;
-		-webkit-background-clip: text;
-		color: transparent;
-		animation: titleReveal 2s ease-out forwards;
-		opacity: 0;
-	}
-
-	.headline-word {
-		display: inline-block;
-		animation: wordSlide 0.8s ease-out forwards;
-		animation-delay: 0.5s;
-		transform: translateY(100px);
-	}
-
-	.headline-separator {
-		display: inline-block;
-		color: var(--purple-glow);
-		animation: wordSlide 0.8s ease-out forwards;
-		animation-delay: 0.7s;
-		transform: translateY(100px);
-	}
-
-	.headline-tagline {
-		display: inline-block;
-		animation: wordSlide 0.8s ease-out forwards;
-		animation-delay: 0.9s;
-		transform: translateY(100px);
-	}
-
-	.subheadline {
-		font-size: 1.25rem;
-		font-weight: 300;
-		color: var(--gray-muted);
-		margin: 1rem 0 0 0;
-		opacity: 0;
-		animation: fadeInUp 1s ease-out 1.2s forwards;
-		letter-spacing: 0.02em;
-	}
-
-	/* Holographic Panels */
-	.holo-panels {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-		gap: 2rem;
-		width: 100%;
-		max-width: 800px;
-		z-index: 15;
-	}
-
-	.holo-panel {
-		position: relative;
-		background: rgba(13, 13, 13, 0.6);
-		backdrop-filter: blur(20px);
-		border: 1px solid rgba(139, 92, 246, 0.2);
-		border-radius: 12px;
-		padding: 1.5rem;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		opacity: 0;
-		animation: panelReveal 1s ease-out forwards;
-	}
-
-	.panel-spice {
-		animation-delay: 1.5s;
-	}
-
-	.panel-graph {
-		animation-delay: 1.7s;
-	}
-
-	.holo-panel:hover {
-		transform: translateY(-4px);
-		border-color: rgba(139, 92, 246, 0.4);
-		box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2);
-	}
-
-	.panel-header {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--purple-glow);
-		margin-bottom: 1rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.panel-content {
-		color: var(--gray-light);
-	}
-
-	.code-snippet {
+	/* Styles for Saffron Content (Component 2 elements, adapted) */
+	.saffron-main-content {
+		position: relative; /* For absolute positioning of terminals */
+		z-index: 10;      /* On top of background elements */
+		width: 100%;      /* Take up full width for more floating space */
+		height: 100%;     /* Take up full height for more floating space */
+		max-width: none;  /* Remove width constraint */
+		max-height: none; /* Remove height constraint */
+		display: flex;
+		flex-direction: row; /* Horizontal layout: left text, right windows */
+		align-items: center;
+		justify-content: space-between; /* Space between left and right content */
+		padding: 2rem 3rem; /* Increased horizontal padding for better margins */
+		margin: 0 auto; /* Center the content */
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-		font-size: 0.75rem;
-		line-height: 1.4;
-		color: rgba(248, 250, 252, 0.8);
-		margin: 0;
-		white-space: pre-wrap;
+        overflow: hidden; /* Terminals are positioned absolutely within this */
 	}
 
-	.graph-display {
-		width: 100%;
-		height: 60px;
-	}
+    /* Left side content area */
+    .saffron-left-content {
+        flex: 0 0 45%; /* Take up 45% of the width, no grow/shrink */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-right: 3rem; /* Increased padding for better separation */
+        margin-left: 1rem; /* Add left margin for breathing room */
+        z-index: 20; /* Above floating windows */
+    }
 
-	.graph-line {
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-linejoin: round;
-		stroke-dasharray: 200;
-		stroke-dashoffset: 200;
-		animation: drawGraph 3s ease-out forwards;
-	}
+    /* Right side content area for floating windows */
+    .saffron-right-content {
+        flex: 1; /* Take up remaining space */
+        position: relative;
+        height: 100vh; /* Full viewport height for floating space */
+        min-height: 600px; /* Minimum height for proper floating */
+    }
 
-	.graph-line.secondary {
-		stroke-width: 1;
-		animation-delay: 0.5s;
+    .saffron-hero-text-area {
+        text-align: left; /* Left-align instead of center */
+        margin-bottom: 3rem; /* More space below headline block */
+    }
+	.saffron-headline {
+		font-size: clamp(2.5rem, 6vw, 4rem); /* Adjusted from C2 */
+		font-weight: 700; /* bold */
+		color: var(--gray-light); /* text-white */
+		margin-bottom: 0.5rem; /* mb-4 */
+		letter-spacing: -0.025em; /* tracking-tight */
 	}
-
-	.panel-glow {
-		position: absolute;
-		inset: -1px;
-		background: linear-gradient(135deg, 
-			rgba(139, 92, 246, 0.1) 0%,
-			transparent 50%,
-			rgba(168, 85, 247, 0.1) 100%
-		);
-		border-radius: 12px;
-		opacity: 0;
-		transition: opacity 0.3s ease;
-		pointer-events: none;
-		z-index: -1;
+    .saffron-headline-brand {
+        color: var(--purple-primary); /* text-purple-400 */
+    }
+	.saffron-subheadline {
+		font-size: clamp(1.25rem, 3vw, 1.75rem); /* Adjusted from C2 */
+		color: #D1D5DB; /* text-gray-300 */
+		margin-bottom: 1rem; /* mb-8 */
 	}
+    .saffron-tagline {
+        font-size: clamp(0.9rem, 2vw, 1.1rem); /* Adjusted from C2 */
+        color: #9CA3AF; /* text-gray-400 */
+        margin-bottom: 1.5rem; /* mb-12 */
+    }
+    .saffron-cta-button-main {
+        font-size: 1rem; /* text-lg */
+        background-color: var(--purple-primary); /* bg-purple-600 */
+        color: var(--gray-light); /* text-white */
+        padding: 0.75rem 1.5rem; /* px-8 py-4 (adjusted) */
+        border: 1px solid var(--purple-glow); /* border-purple-400 */
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .saffron-cta-button-main:hover {
+        background-color: var(--purple-bright); /* hover:bg-purple-500 */
+        box-shadow: 0 4px 15px color-mix(in srgb, var(--purple-bright) 25%, transparent); /* hover:shadow-lg hover:shadow-purple-500/25 */
+    }
+    .saffron-cta-button-main span {
+        transition: color 0.3s ease;
+    }
+    .saffron-cta-button-main:hover span {
+        color: var(--black-deep); /* group-hover:text-purple-100 (using black for contrast) */
+    }
 
-	.holo-panel:hover .panel-glow {
-		opacity: 1;
-	}
-
-	/* Detailed Hologram */
-	.detailed-hologram {
-		position: absolute;
-		top: 30%;
-		right: 5%;
-		width: 250px;
-		background: rgba(13, 13, 13, 0.9);
-		backdrop-filter: blur(30px);
-		border: 1px solid rgba(139, 92, 246, 0.4);
-		border-radius: 8px;
-		padding: 1rem;
-		animation: hologramAppear 0.3s ease-out forwards;
-		z-index: 25;
-	}
-
-	.hologram-header {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--purple-glow);
-		margin-bottom: 0.5rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.hologram-body {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.component-diagram {
-		flex: 1;
-	}
-
-	.component-diagram svg {
-		width: 100%;
-		height: auto;
-	}
-
-	.data-stream {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.data-line {
-		height: 1px;
-		background: linear-gradient(90deg,
-			transparent 0%,
-			var(--purple-glow) 50%,
-			transparent 100%
-		);
-		animation: dataFlow 2s ease-in-out infinite;
-		animation-delay: var(--delay, 0s);
-	}
-
-	.hologram-glow {
-		position: absolute;
-		inset: -10px;
-		background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);
-		filter: blur(20px);
-		pointer-events: none;
-		z-index: -1;
-	}
-
-	/* Call to Action */
-	.cta-button {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem 2rem;
-		background: transparent;
-		border: 1px solid rgba(139, 92, 246, 0.4);
-		border-radius: 8px;
-		color: var(--gray-light);
-		text-decoration: none;
-		font-weight: 500;
-		font-size: 1rem;
-		transition: all 0.3s ease;
-		overflow: hidden;
-		opacity: 0;
-		animation: fadeInUp 1s ease-out 2s forwards;
-	}
-
-	.cta-button:hover {
-		border-color: var(--purple-glow);
-		transform: translateY(-2px);
-		box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
-	}
-
-	.cta-text {
-		position: relative;
-		z-index: 2;
-	}
-
-	.cta-glow {
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(135deg, 
-			rgba(139, 92, 246, 0.1) 0%,
-			rgba(168, 85, 247, 0.1) 100%
-		);
-		opacity: 0;
-		transition: opacity 0.3s ease;
-	}
-
-	.cta-button:hover .cta-glow {
-		opacity: 1;
-	}
-
-	/* Integrated Analysis System */
-	.integrated-analysis {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		pointer-events: none;
-		z-index: 8;
-	}
-
-	.analysis-trigger {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 40px;
-		height: 40px;
-		transform: translate(-50%, -50%);
-		pointer-events: all;
-		cursor: pointer;
-		border-radius: 50%;
-		background: rgba(139, 92, 246, 0.1);
-		border: 1px solid rgba(139, 92, 246, 0.3);
-		transition: all 0.3s ease;
-	}
-
-	.analysis-trigger:hover {
-		transform: translate(-50%, -50%) scale(1.1);
-		background: rgba(139, 92, 246, 0.2);
-		border-color: rgba(139, 92, 246, 0.6);
-	}
-
-	.trigger-glow {
-		position: absolute;
-		inset: -10px;
-		background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);
-		border-radius: 50%;
-		animation: triggerPulse 2s ease-in-out infinite;
-	}
-
-	@keyframes triggerPulse {
-		0%, 100% { 
-			opacity: 0.3; 
-			transform: scale(1);
-		}
-		50% { 
-			opacity: 0.6; 
-			transform: scale(1.2);
-		}
-	}
-
-	.spice-indicators {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-	}
-
-	.indicator {
-		position: absolute;
-		left: var(--pos-x);
-		top: var(--pos-y);
-		background: rgba(13, 13, 13, 0.8);
+	/* Terminal Window Styles */
+	.terminal-window {
+		position: absolute; /* Crucial for physics */
+		background: rgba(13, 13, 13, 0.85); /* Darker, like C1's board */
 		backdrop-filter: blur(10px);
-		border: 1px solid rgba(139, 92, 246, 0.3);
-		border-radius: 4px;
-		padding: 0.25rem 0.5rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--gray-light);
-		animation: indicatorFloat 4s ease-in-out infinite;
-	}
-
-	.indicator.voltage {
-		border-color: rgba(239, 68, 68, 0.6);
-		animation-delay: 0s;
-	}
-	.indicator.voltage .value {
-		color: var(--spectral-red);
-	}
-
-	.indicator.current {
-		border-color: rgba(34, 197, 94, 0.6);
-		animation-delay: 1.3s;
-	}
-	.indicator.current .value {
-		color: var(--spectral-green);
-	}
-
-	.indicator.frequency {
-		border-color: rgba(6, 182, 212, 0.6);
-		animation-delay: 2.6s;
-	}
-	.indicator.frequency .value {
-		color: var(--spectral-cyan);
-	}
-
-	.indicator-pulse {
-		position: absolute;
-		inset: -2px;
-		border-radius: 6px;
-		background: linear-gradient(45deg, transparent, rgba(139, 92, 246, 0.2), transparent);
-		animation: indicatorPulseAnim 3s ease-in-out infinite;
-		z-index: -1;
-	}
-
-	@keyframes indicatorFloat {
-		0%, 100% { 
-			transform: translateY(0px) scale(1);
-			opacity: 0.7;
-		}
-		50% { 
-			transform: translateY(-5px) scale(1.05);
-			opacity: 1;
-		}
-	}
-
-	@keyframes indicatorPulseAnim {
-		0%, 100% { 
-			opacity: 0;
-			transform: scale(1);
-		}
-		50% { 
-			opacity: 0.5;
-			transform: scale(1.1);
-		}
-	}
-
-	.ambient-waveform {
-		position: absolute;
-		bottom: 20%;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 60%;
-		height: 60px;
-		opacity: 0.4;
-	}
-
-	.waveform-bg {
-		width: 100%;
-		height: 100%;
-	}
-
-	.ambient-wave {
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-dasharray: 400;
-		stroke-dashoffset: 400;
-		animation: waveFlow 8s ease-in-out infinite;
-	}
-
-	@keyframes waveFlow {
-		0%, 100% {
-			stroke-dashoffset: 400;
-			opacity: 0.2;
-		}
-		50% {
-			stroke-dashoffset: 0;
-			opacity: 0.8;
-		}
-	}
-
-	/* Advanced Hologram */
-	.advanced-hologram {
-		position: absolute;
-		top: 20%;
-		right: 10%;
-		width: 320px;
-		background: rgba(13, 13, 13, 0.95);
-		backdrop-filter: blur(30px);
-		border: 1px solid rgba(139, 92, 246, 0.4);
-		border-radius: 12px;
-		padding: 1.5rem;
-		animation: hologramAppear 0.4s ease-out forwards;
-		z-index: 30;
-	}
-
-	.hologram-layers {
+		border: 1px solid rgba(139, 92, 246, 0.25); /* --purple-primary with alpha */
+		box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 15px rgba(139, 92, 246, 0.1);
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		overflow: hidden; /* Important */
+        font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+        border-radius: 6px; /* Subtle rounding */
+        transition: box-shadow 0.3s ease, border-color 0.3s ease;
 	}
+    .terminal-window:hover {
+        /* animation: terminalFloatAnim 3s ease-in-out infinite; */
+        border-color: rgba(139, 92, 246, 0.5);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.4), 0 0 25px rgba(139, 92, 246, 0.2);
+    }
+    @keyframes terminalFloatAnim { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-4px); } }
 
-	.layer {
-		background: rgba(26, 26, 26, 0.6);
-		border: 1px solid rgba(139, 92, 246, 0.2);
-		border-radius: 8px;
-		padding: 1rem;
-		animation: layerSlide 0.3s ease-out forwards;
-	}
-
-	.layer.circuit-analysis {
-		animation-delay: 0.1s;
-	}
-	.layer.spice-code {
-		animation-delay: 0.2s;
-	}
-	.layer.frequency-response {
-		animation-delay: 0.3s;
-	}
-
-	@keyframes layerSlide {
-		from {
-			opacity: 0;
-			transform: translateX(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0);
-		}
-	}
-
-	.analysis-header {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--purple-glow);
-		margin-bottom: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+	.terminal-header {
+		background-color: rgba(26, 26, 26, 0.7); /* --black-surface with alpha */
+		border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+		padding: 0.3rem 0.6rem; /* py-2 px-4 */
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		cursor: move;
+		user-select: none;
 	}
+    .terminal-header .title-text {
+        font-size: 0.75rem; /* text-sm */
+        color: var(--purple-primary);
+        margin-left: 0.5rem;
+    }
+    .terminal-header .title-text.alt {
+        color: #9CA3AF; /* text-gray-400 */
+    }
+     .terminal-header .title-text.status-header {
+        color: var(--spectral-green);
+    }
+    .terminal-buttons { display: flex; gap: 0.4rem; }
+    .term-btn { width: 0.6rem; height: 0.6rem; border-radius: 50%; }
+    .term-btn.r { background-color: var(--spectral-red); }
+    .term-btn.y { background-color: var(--spectral-yellow); }
+    .term-btn.g { background-color: var(--spectral-green); }
 
-	.status-dot {
-		width: 6px;
-		height: 6px;
-		background: var(--spectral-green);
-		border-radius: 50%;
-		animation: statusBlink 2s ease-in-out infinite;
+	.terminal-content {
+		padding: 0.75rem;
+		font-size: 0.75rem; /* text-xs / text-sm */
+		flex-grow: 1;
+		overflow-y: auto;
+		line-height: 1.5;
+        color: var(--gray-light);
 	}
+    .term-text-muted { color: var(--gray-muted); }
+    .term-text-faded { color: color-mix(in srgb, var(--gray-muted) 70%, transparent); }
+    .term-text-success { color: var(--spectral-green); }
+    .term-text-accent { color: var(--purple-primary); }
+    .term-text-warning { color: var(--spectral-orange); }
+    .term-text-bright { color: var(--gray-light); }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mt-1 { margin-top: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .text-xs { font-size: 0.7rem; }
 
-	@keyframes statusBlink {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.3; }
-	}
+    .bonsai-flower-display { text-align: center; padding: 1rem 0; }
+    .flower-art { font-size: 2.5rem; line-height: 1; color: var(--purple-primary); transition: all 0.5s ease;}
+    .flower-art .flower-red { color: var(--spectral-red); }
+    .flower-art .flower-yellow { color: var(--spectral-yellow); }
+    .flower-art .flower-main { color: var(--purple-bright); }
 
-	.analysis-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 0.75rem;
-	}
+    .schematic-svg .schematic-trace { stroke: var(--purple-primary); stroke-width: 2; fill: none; }
+    .schematic-svg .schematic-label { fill: var(--purple-primary); font-size: 0.7rem; }
 
-	.analysis-item {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.25rem;
-	}
+    .graph-svg .graph-grid-line { stroke: rgba(100,100,100,0.2); stroke-width: 0.5; }
+    .graph-svg .graph-axis-line { stroke: var(--gray-muted); stroke-width: 1; }
+    .graph-svg .graph-curve-line { stroke-width: 2; fill: none; }
+    .graph-svg .rainbow-stop1 { stop-color: var(--purple-primary); }
+    .graph-svg .rainbow-stop2 { stop-color: #ec4899; } /* pinkish */
+    .graph-svg .rainbow-stop3 { stop-color: var(--spectral-orange); }
+    .graph-svg .graph-label { fill: var(--gray-muted); font-size: 0.65rem; text-anchor: middle; }
 
-	.analysis-item .label {
-		font-size: 0.7rem;
-		color: var(--gray-muted);
-		font-weight: 500;
-	}
+    /* Circuit 3D Window Styles */
+    .circuit-3d-container {
+        position: relative;
+        width: 100%;
+        height: 100px; /* Reduced from 120px */
+        perspective: 1000px;
+        overflow: hidden;
+        border-radius: 6px;
+    }
+    
+    .circuit-board-3d {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, 
+            rgba(139, 92, 246, 0.05) 0%, 
+            rgba(168, 85, 247, 0.08) 50%, 
+            rgba(139, 92, 246, 0.05) 100%);
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        border-radius: 8px;
+        transform-style: preserve-3d;
+    }
 
-	.analysis-item .value {
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--gray-light);
-	}
+    .circuit-board-3d .component {
+        position: absolute;
+        border-radius: 2px; /* Slightly smaller border radius */
+        transition: all 0.3s ease;
+    }
 
-	.gradient-text {
-		background: linear-gradient(45deg, var(--purple-bright), var(--spectral-cyan));
-		background-clip: text;
-		-webkit-background-clip: text;
-		color: transparent;
-	}
+    .circuit-board-3d .resistor {
+        width: 16px; height: 6px; background: linear-gradient(90deg, #8B5CF6, #A855F7);
+        top: 20%; left: 15%; animation: componentGlow 4s ease-in-out infinite;
+    }
 
-	.code-header {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--purple-glow);
-		margin-bottom: 0.5rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
+    .circuit-board-3d .capacitor {
+        width: 10px; height: 12px; background: linear-gradient(180deg, #EC4899, #F97316);
+        top: 60%; left: 25%; animation: componentGlow 4s ease-in-out infinite 0.8s;
+    }
 
-	.code-content {
-		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-		font-size: 0.7rem;
-		line-height: 1.4;
-	}
+    .circuit-board-3d .ic {
+        width: 20px; height: 10px; background: linear-gradient(45deg, #059669, #0EA5E9);
+        top: 40%; left: 50%; animation: componentGlow 4s ease-in-out infinite 1.6s;
+    }
 
-	.code-line {
-		margin-bottom: 0.25rem;
-		animation: codeType 0.5s ease-out forwards;
-		opacity: 0;
-	}
+    .circuit-board-3d .transistor {
+        width: 8px; height: 8px; background: radial-gradient(circle, #F59E0B, #EF4444);
+        top: 70%; left: 60%; animation: componentGlow 4s ease-in-out infinite 2.4s;
+    }
 
-	.code-line:nth-child(1) { animation-delay: 0.5s; }
-	.code-line:nth-child(2) { animation-delay: 0.7s; }
+    .circuit-board-3d .diode {
+        width: 14px; height: 5px; background: linear-gradient(90deg, #10B981, #3B82F6);
+        top: 30%; left: 75%; animation: componentGlow 4s ease-in-out infinite 3.2s;
+    }
 
-	@keyframes codeType {
-		from {
-			opacity: 0;
-			transform: translateX(-10px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0);
-		}
-	}
+    .circuit-board-3d .circuit-node {
+        position: absolute; width: 3px; height: 3px; background: #8B5CF6;
+        border-radius: 50%; animation: nodePulse 3s ease-in-out infinite;
+    }
 
-	.keyword {
-		color: var(--spectral-cyan);
-		font-weight: 600;
-	}
+    .circuit-board-3d .node-1 { top: 25%; left: 20%; animation-delay: 0s; }
+    .circuit-board-3d .node-2 { top: 25%; right: 20%; animation-delay: 0.6s; }
+    .circuit-board-3d .node-3 { bottom: 25%; left: 20%; animation-delay: 1.2s; }
+    .circuit-board-3d .node-4 { bottom: 25%; right: 20%; animation-delay: 1.8s; }
+    .circuit-board-3d .node-5 { top: 50%; left: 50%; animation-delay: 2.4s; }
 
-	.model {
-		color: var(--spectral-yellow);
-	}
 
-	.node {
-		color: var(--spectral-green);
-	}
+    /* Saffron Hero Text Area */
+    .saffron-hero-text-area {
+        margin-bottom: 3rem; /* Add space between hero and CTA sections */
+    }
 
-	.value {
-		color: var(--spectral-orange);
-	}
+    /* Saffron CTA Section */
+    .saffron-cta-area {
+        text-align: left; /* Left-align instead of center */
+        padding-top: 2rem; /* Add top padding for visual separation */
+        margin-top: 2rem; /* Add top margin for extra space */
+        border-top: 1px solid rgba(139, 92, 246, 0.1); /* Subtle separator line */
+        padding-top: 2rem; /* Padding above the border */
+    }
+    .saffron-cta-headline {
+        font-size: clamp(1.2rem, 3vw, 1.8rem);
+        color: var(--gray-light);
+        margin-bottom: 1.5rem;
+        margin-top: 0.5rem; /* Small top margin for breathing room */
+    }
+    .saffron-cta-highlight { color: var(--purple-primary); }
+    .saffron-cta-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-start; /* Left-align buttons */
+    }
+    @media (min-width: 768px) {
+        .saffron-cta-buttons {
+            flex-direction: row;
+            justify-content: flex-start; /* Left-align buttons on desktop */
+        }
+    }
+    .saffron-cta-button-primary, .saffron-cta-button-secondary {
+        font-size: 0.9rem;
+        padding: 0.6rem 1.2rem;
+        border: 2px solid var(--purple-primary);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-width: 200px;
+    }
+    .saffron-cta-button-primary {
+        background-color: var(--purple-primary);
+        color: var(--black-deep);
+    }
+    .saffron-cta-button-primary:hover {
+        background-color: var(--purple-bright);
+        border-color: var(--purple-bright);
+    }
+    .saffron-cta-button-secondary {
+        background-color: transparent;
+        color: var(--purple-primary);
+    }
+    .saffron-cta-button-secondary:hover {
+        background-color: var(--purple-primary);
+        color: var(--black-deep);
+    }
 
-	.response-graph {
-		width: 100%;
-		height: 60px;
-	}
-
-	.response-curve {
-		stroke-width: 2;
-		stroke-linecap: round;
-		stroke-dasharray: 200;
-		stroke-dashoffset: 200;
-		animation: drawResponse 2s ease-out forwards;
-		animation-delay: 0.8s;
-	}
-
-	.response-fill {
-		opacity: 0;
-		animation: fillResponse 1.5s ease-out forwards;
-		animation-delay: 1.5s;
-	}
-
-	@keyframes drawResponse {
-		to { stroke-dashoffset: 0; }
-	}
-
-	@keyframes fillResponse {
-		to { opacity: 0.6; }
-	}
-
-	.hologram-effects {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		border-radius: 12px;
-		overflow: hidden;
-	}
-
-	.scan-line {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 2px;
-		background: linear-gradient(90deg, transparent, var(--purple-bright), transparent);
-		animation: scanLine 3s ease-in-out infinite;
-	}
-
-	@keyframes scanLine {
-		0%, 100% {
-			transform: translateY(-2px);
-			opacity: 0;
-		}
-		50% {
-			transform: translateY(300px);
-			opacity: 0.8;
-		}
-	}
-
-	.data-particles {
-		position: absolute;
-		inset: 0;
-	}
-
-	.data-particle {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: var(--purple-bright);
-		border-radius: 50%;
-		animation: particleFloat var(--duration, 4s) ease-in-out infinite;
-		animation-delay: var(--particle-delay, 0s);
-		left: calc(20% + var(--particle-delay, 0s) * 15%);
-		top: calc(20% + var(--particle-delay, 0s) * 10%);
-	}
-
-	@keyframes particleFloat {
-		0%, 100% {
-			transform: translate3d(0, 0, 0) scale(1);
-			opacity: 0.3;
-		}
-		50% {
-			transform: translate3d(20px, -15px, 0) scale(1.5);
-			opacity: 1;
-		}
-	}
-
-	.hologram-border {
-		position: absolute;
-		inset: -1px;
-		border-radius: 12px;
-		background: linear-gradient(45deg, 
-			transparent 30%,
-			rgba(139, 92, 246, 0.3) 50%,
-			transparent 70%
-		);
-		animation: borderShimmer 4s ease-in-out infinite;
-		z-index: -1;
-	}
-
-	@keyframes borderShimmer {
-		0%, 100% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
-		}
-	}
-
-	/* Animations */
-	@keyframes coreRotate {
-		from { transform: rotate(0deg) rotateX(10deg) rotateY(10deg); }
-		to { transform: rotate(360deg) rotateX(10deg) rotateY(10deg); }
-	}
-
-	@keyframes nodePulse {
-		0%, 100% { 
-			transform: scale(1); 
-			box-shadow: 0 0 20px var(--purple-glow), 0 0 40px var(--purple-glow);
-		}
-		50% { 
-			transform: scale(1.2); 
-			box-shadow: 0 0 30px var(--purple-glow), 0 0 60px var(--purple-glow);
-		}
-	}
-
-	@keyframes traceAnimate {
-		0% { stroke-dashoffset: 300; opacity: 0; }
-		20% { opacity: 1; }
-		80% { opacity: 1; }
-		100% { stroke-dashoffset: 0; opacity: 0; }
-	}
-
-	@keyframes beamSweep {
-		0%, 100% { opacity: 0; transform: scaleX(0); }
-		50% { opacity: 0.6; transform: scaleX(1); }
-	}
-
-	@keyframes spectralSweep {
-		0%, 85%, 100% { 
-			opacity: 0; 
-			transform: scaleX(0) translateX(-50px);
-		}
-		15%, 70% { 
-			opacity: 0.9; 
-			transform: scaleX(1) translateX(0);
-		}
-		50% {
-			opacity: 1;
-			transform: scaleX(1.1) translateX(10px);
-		}
-	}
-
-	@keyframes coreGlowPulse {
-		0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
-		50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); }
-	}
-
-	@keyframes titleReveal {
-		to { opacity: 1; }
-	}
-
-	@keyframes wordSlide {
-		to { transform: translateY(0); }
-	}
-
-	@keyframes fadeInUp {
-		from { opacity: 0; transform: translateY(30px); }
-		to { opacity: 1; transform: translateY(0); }
-	}
-
-	@keyframes panelReveal {
-		from { 
-			opacity: 0; 
-			transform: translateY(40px) rotateX(10deg);
-		}
-		to { 
-			opacity: 1; 
-			transform: translateY(0) rotateX(0deg);
-		}
-	}
-
-	@keyframes drawGraph {
-		to { stroke-dashoffset: 0; }
-	}
-
-	@keyframes hologramAppear {
-		from { 
-			opacity: 0; 
-			transform: scale(0.9) translateY(20px);
-		}
-		to { 
-			opacity: 1; 
-			transform: scale(1) translateY(0);
-		}
-	}
-
-	@keyframes dataFlow {
-		0%, 100% { transform: scaleX(0); opacity: 0; }
-		50% { transform: scaleX(1); opacity: 1; }
-	}
-
-	/* Responsive Design */
+    /* Responsive adjustments */
 	@media (max-width: 768px) {
-		.content-wrapper {
-			gap: 2rem;
-			padding: 1rem;
-		}
-
-		.circuit-core {
-			width: 250px;
-			height: 250px;
-		}
-
-		.headline {
-			font-size: clamp(2rem, 10vw, 3.5rem);
-		}
-
-		.holo-panels {
-			grid-template-columns: 1fr;
-			gap: 1rem;
-		}
-
-		.advanced-hologram {
-			position: relative;
-			top: auto;
-			right: auto;
-			width: 100%;
-			margin-top: 1rem;
-			max-width: 300px;
-		}
-
-		.floating-component {
-			opacity: 0.2;
-		}
-
-		.background-traces {
-			opacity: 0.2;
-		}
-
-		.spice-indicators {
-			opacity: 0.6;
-		}
-
-		.ambient-waveform {
-			width: 80%;
-			height: 40px;
-		}
-
-		.particle {
-			display: none;
-		}
+		.circuit-core { width: 200px; height: 200px; } /* Smaller 3D circuit */
+        
+        /* Mobile layout: stack vertically instead of side-by-side */
+        .saffron-main-content { 
+            width: 90%; /* More breathing room on mobile */
+            height: 95%; 
+            padding: 1.5rem; /* Increased padding for mobile */
+            margin: 0 auto; /* Center the content */
+            flex-direction: column; /* Stack vertically on mobile */
+            justify-content: center;
+        }
+        
+        .saffron-left-content {
+            flex: none; /* Remove flex constraints */
+            padding-right: 0; /* Remove right padding */
+            padding: 0 1rem; /* Add horizontal padding for mobile */
+            margin-left: 0; /* Reset left margin */
+            text-align: center; /* Center-align text on mobile */
+        }
+        
+        .saffron-hero-text-area {
+            margin-bottom: 2rem; /* Adjust spacing for mobile */
+        }
+        
+        .saffron-cta-area {
+            padding-top: 1.5rem; /* Reduce top padding on mobile */
+            margin-top: 1.5rem; /* Reduce top margin on mobile */
+        }
+        
+        .saffron-right-content {
+            display: none; /* Hide the floating windows container */
+        }
+        
+        .saffron-hero-text-area {
+            text-align: center; /* Center-align on mobile */
+            margin-bottom: 2rem; /* Adjust spacing */
+        }
+        
+        .saffron-cta-area {
+            text-align: center; /* Center-align CTA on mobile */
+        }
+        
+        .saffron-cta-buttons {
+            align-items: center; /* Center-align buttons on mobile */
+        }
+        
+        /* Hide floating windows completely on mobile */
+        .terminal-window { 
+            display: none !important;
+        }
+        
+        /* Make headline and content more mobile-friendly */
+        .saffron-headline {
+            font-size: 2.5rem;
+        }
+        
+        .saffron-subheadline {
+            font-size: 1.1rem;
+        }
+        
+        .saffron-tagline {
+            font-size: 0.9rem;
+        }
+        
+        /* Adjust floating components for mobile */
+        .floating-components {
+            opacity: 0.3;
+        }
+        
+        .floating-component {
+            animation-duration: 12s;
+        }
+        
+        /* Show a mobile-friendly info panel instead */
+        .mobile-info-panel {
+            display: block;
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(13, 13, 13, 0.95);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
 	}
-
-	@media (max-width: 480px) {
-		.circuit-core {
-			width: 200px;
-			height: 200px;
-		}
-
-		.holo-panel {
-			padding: 1rem;
-		}
-
-		.cta-button {
-			padding: 0.75rem 1.5rem;
-			font-size: 0.9rem;
-		}
-
-		.advanced-hologram {
-			padding: 1rem;
-			max-width: 280px;
-		}
-
-		.analysis-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
-
-		.floating-components {
-			opacity: 0.5;
-		}
-
-		.prism-container {
-			opacity: 0.3;
-		}
-	}
+    
+    /* Hide mobile info panel on desktop */
+    .mobile-info-panel {
+        display: none;
+    }
 </style>
