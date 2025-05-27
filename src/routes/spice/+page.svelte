@@ -196,26 +196,30 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			
 			{#if resultArray}
 				<div class="results-content">
-					{#if plotType === 'd3'}
-						<D3PlotCanvas 
-							{resultArray}
-							{displayData}
-							{theme}
-						/>
-					{:else}
-						<PlotCanvas 
-							{resultArray}
-							{displayData}
-							{theme}
-						/>
-					{/if}
+					<div class="plot-area">
+						{#if plotType === 'd3'}
+							<D3PlotCanvas 
+								{resultArray}
+								{displayData}
+								{theme}
+							/>
+						{:else}
+							<PlotCanvas 
+								{resultArray}
+								{displayData}
+								{theme}
+							/>
+						{/if}
+					</div>
 					
-					<DisplayBox 
-						{resultArray}
-						{displayData}
-						{theme}
-						on:displayDataChange={(e) => onDisplayDataChange(e.detail)}
-					/>
+					<div class="control-panel">
+						<DisplayBox 
+							{resultArray}
+							bind:displayData
+							{theme}
+							on:updateDisplay={(e) => onDisplayDataChange(e.detail)}
+						/>
+					</div>
 				</div>
 			{:else}
 				<div class="no-results">
@@ -408,33 +412,7 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		border-radius: 4px;
 		transition: background-color 0.2s;
 		font-size: 0.875rem;
-		color: var(--text-secondary);
-	}
-
-	.plot-type-selector label:hover {
-		background: var(--bg-secondary);
-	}
-
-	.plot-type-selector input[type="radio"] {
-		margin: 0;
-		accent-color: var(--primary-color);
-	}
-
-	.plot-type-selector input[type="radio"]:checked + span {
 		color: var(--text-primary);
-		font-weight: 500;
-	}
-
-	.plot-type-selector label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.875rem;
-		color: var(--text-primary);
-		transition: background-color 0.2s;
 	}
 
 	.plot-type-selector label:hover {
@@ -447,9 +425,27 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	}
 
 	.results-content {
+		display: grid;
+		grid-template-columns: 1fr 350px;
+		gap: 1.5rem;
+		flex: 1;
+		min-height: 0; /* Allow grid items to shrink */
+	}
+
+	.plot-area {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: 12px;
+		padding: 1rem;
+		min-height: 400px;
 		display: flex;
 		flex-direction: column;
-		flex: 1;
+	}
+
+	.control-panel {
+		display: flex;
+		flex-direction: column;
+		min-height: 0; /* Allow flex items to shrink */
 	}
 
 	.no-results {
@@ -461,6 +457,12 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		font-style: italic;
 	}
 
+	@media (max-width: 1200px) {
+		.results-content {
+			grid-template-columns: 1fr 300px;
+		}
+	}
+
 	@media (max-width: 1024px) {
 		.simulator-content {
 			grid-template-columns: 1fr;
@@ -469,6 +471,19 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		.editor-section {
 			border-right: none;
 			border-bottom: 1px solid var(--border-color);
+		}
+
+		.results-content {
+			grid-template-columns: 1fr;
+			grid-template-rows: 1fr auto;
+		}
+
+		.control-panel {
+			order: 2;
+		}
+
+		.plot-area {
+			order: 1;
 		}
 	}
 

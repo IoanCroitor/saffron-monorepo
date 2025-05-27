@@ -1,321 +1,354 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import type { ResultArrayType } from '../lib/simulationArray';
-	import { isComplex } from '../lib/simulationArray';
+	import type { DisplayDataType } from '../lib/displayData';
 
 	export let resultArray: ResultArrayType | undefined = undefined;
+	export let displayData: DisplayDataType[] = [];
+	export let filename: string = 'spice_simulation';
 
-	const dispatch = createEventDispatcher();
+	let isGenerating = false;
 
-	let downloadLink: HTMLAnchorElement;
-	let href = '';
-	let includeComplex = false;
-	let polarFormat = false;
-	let showOptions = false;
-
-	type ComplexPolar = {
-		magnitude: number;
-		phase: number;
-	};
-
-	function generateCSVReal(resultArray: ResultArrayType): string {
-		let csv = '';
-		let header = '';
-		const vars = resultArray.results[0].variableNames;
-
-		// Generate header
-		vars.forEach((name) => {
-			for (let i = 0; i < resultArray.results.length; i++) {
-				const sweepIndex = resultArray.sweep.length > i
-					? `[${resultArray.sweep[i]}]`
-					: '';
-				header += `${name}${sweepIndex},`;
-			}
-		});
-		header = header.slice(0, -1) + '\n'; // Remove last comma and add newline
-
-		// Find maximum number of data points
-		const maxRows = resultArray.results.reduce((max, result) => {
-			return Math.max(max, result.data[0]?.values.length || 0);
-		}, 0);
-
-		// Generate data rows
-		for (let row = 0; row < maxRows; row++) {
-			let rowData = '';
-			for (let col = 0; col < vars.length; col++) {
-				for (let sweep = 0; sweep < resultArray.results.length; sweep++) {
-					const result = resultArray.results[sweep];
-					if (row < result.data[col]?.values.length && result.dataType === 'real') {
-						const value = result.data[col].values[row] as number;
-						rowData += value.toExponential() + ',';
-					} else {
-						rowData += ','; // Empty cell for missing data
-					}
-				}
-			}
-			csv += rowData.slice(0, -1) + '\n'; // Remove last comma and add newline
+	function generateCSV(): string {
+		if (!resultArray || !resultArray.results || resultArray.results.length === 0) {
+			return '';
 		}
 
-		return header + csv;
-	}
-
-	function generateCSVComplex(resultArray: ResultArrayType, usePolar = false): string {
-		let csv = '';
-		let header = '';
-		const vars = resultArray.results[0].variableNames;
-
-		// Generate header for complex data
-		vars.forEach((name) => {
-			for (let i = 0; i < resultArray.results.length; i++) {
-				const sweepIndex = resultArray.sweep.length > i
-					? `[${resultArray.sweep[i]}]`
-					: '';
-				if (usePolar) {
-					header += `${name}_mag${sweepIndex},${name}_phase${sweepIndex},`;
-				} else {
-					header += `${name}_real${sweepIndex},${name}_imag${sweepIndex},`;
-				}
+		// Get all available signals from variable names
+		const allSignals = new Set<string>();
+		for (const result of resultArray.results) {
+			if (result.variableNames) {
+				result.variableNames.forEach(name => allSignals.add(name));
 			}
-		});
-		header = header.slice(0, -1) + '\n';
+		}
 
-		// Find maximum number of data points
-		const maxRows = resultArray.results.reduce((max, result) => {
-			return Math.max(max, result.data[0]?.values.length || 0);
-		}, 0);
+		// Remove 'x' from signals and sort
+		const signals = Array.from(allSignals).filter(s => s !== 'x').sort();
+		
+		// Create header row
+		const headers = ['x', ...signals];
+		let csv = headers.join(',') + '\n';
 
-		// Generate data rows
-		for (let row = 0; row < maxRows; row++) {
-			let rowData = '';
-			for (let col = 0; col < vars.length; col++) {
-				for (let sweep = 0; sweep < resultArray.results.length; sweep++) {
-					const result = resultArray.results[sweep];
-					if (row < result.data[col]?.values.length && result.dataType === 'complex') {
-						const complexValue = result.data[col].values[row] as any;
+		// Collect all data points
+		const dataPoints: { [key: string]: any }[] = [];
+		
+		for (const result of resultArray.results) {
+			if (!result.data || result.data.length === 0) continue;
+
+			// Find x variable (usually first variable)
+			const xIndex = result.variableNames?.indexOf('x') ?? 0;
+			const xData = result.data[xIndex]?.values || [];
+			
+			for (let i = 0; i < result.numPoints; i++) {
+				const point: { [key: string]: any } = { 
+					x: xData[i] || resultArray.sweep?.[i] || i 
+				};
+				
+				for (const signal of signals) {
+					const signalIndex = result.variableNames?.indexOf(signal) ?? -1;
+					if (signalIndex >= 0 && result.data[signalIndex]) {
+						const signalData = result.data[signalIndex].values;
 						
-						if (usePolar) {
-							const magnitude = Math.sqrt(complexValue.re * complexValue.re + complexValue.im * complexValue.im);
-							const phase = Math.atan2(complexValue.im, complexValue.re) * 180 / Math.PI;
-							rowData += `${magnitude.toExponential()},${phase.toExponential()},`;
+						if (i < signalData.length) {
+							const value = signalData[i];
+							
+							// Handle complex numbers
+							if (typeof value === 'object' && value !== null) {
+								if ('real' in value && 'img' in value) {
+									// Complex number - export real and imaginary parts
+									point[signal] = value.real;
+									point[signal + '_imag'] = value.img;
+								} else {
+									point[signal] = JSON.stringify(value);
+								}
+							} else {
+								point[signal] = value;
+							}
 						} else {
-							rowData += `${complexValue.re.toExponential()},${complexValue.im.toExponential()},`;
+							point[signal] = '';
 						}
 					} else {
-						rowData += ',,'; // Empty cells for missing data
+						point[signal] = '';
 					}
 				}
+				
+				dataPoints.push(point);
 			}
-			csv += rowData.slice(0, -1) + '\n';
 		}
 
-		return header + csv;
+		// Sort data points by x value
+		dataPoints.sort((a, b) => (a.x || 0) - (b.x || 0));
+
+		// Update headers to include complex parts if any
+		const finalHeaders = new Set(['x']);
+		for (const point of dataPoints) {
+			Object.keys(point).forEach(key => finalHeaders.add(key));
+		}
+		const sortedHeaders = Array.from(finalHeaders).sort((a, b) => {
+			if (a === 'x') return -1;
+			if (b === 'x') return 1;
+			return a.localeCompare(b);
+		});
+
+		// Generate CSV content
+		csv = sortedHeaders.join(',') + '\n';
+		
+		for (const point of dataPoints) {
+			const row = sortedHeaders.map(header => {
+				const value = point[header];
+				if (value === undefined || value === null) {
+					return '';
+				}
+				// Escape values that contain commas or quotes
+				const stringValue = String(value);
+				if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+					return '"' + stringValue.replace(/"/g, '""') + '"';
+				}
+				return stringValue;
+			});
+			csv += row.join(',') + '\n';
+		}
+
+		return csv;
 	}
 
 	function downloadCSV() {
-		if (!resultArray || resultArray.results.length === 0) return;
+		if (!resultArray || !resultArray.results || resultArray.results.length === 0) {
+			alert('No simulation data available to download');
+			return;
+		}
+
+		isGenerating = true;
 
 		try {
-			let csvData = '';
-			const firstResult = resultArray.results[0];
+			const csvContent = generateCSV();
 			
-			if (firstResult.dataType === 'complex' && includeComplex) {
-				csvData = generateCSVComplex(resultArray, polarFormat);
-			} else {
-				csvData = generateCSVReal(resultArray);
+			if (!csvContent) {
+				alert('No data to export');
+				return;
 			}
 
 			// Create blob and download
-			const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-			const url = URL.createObjectURL(blob);
-			
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 			const link = document.createElement('a');
-			link.href = url;
-			link.download = `simulation_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+			
+			const url = URL.createObjectURL(blob);
+			link.setAttribute('href', url);
+			link.setAttribute('download', `${filename}.csv`);
+			link.style.visibility = 'hidden';
+			
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
 			
+			// Clean up the URL object
 			URL.revokeObjectURL(url);
 			
-			dispatch('downloaded');
 		} catch (error) {
 			console.error('Error generating CSV:', error);
-			dispatch('error', { message: 'Failed to generate CSV file' });
+			alert('Error generating CSV file');
+		} finally {
+			isGenerating = false;
 		}
 	}
 
-	function toggleOptions() {
-		showOptions = !showOptions;
-	}
+	function getDataInfo(): string {
+		if (!resultArray || !resultArray.results || resultArray.results.length === 0) {
+			return 'No data';
+		}
 
-	// Check if we have complex data
-	$: hasComplexData = resultArray?.results?.[0]?.dataType === 'complex';
+		const totalPoints = resultArray.results.reduce((sum: number, result) => {
+			return sum + (result.numPoints || 0);
+		}, 0);
+
+		const allSignals = new Set<string>();
+		for (const result of resultArray.results) {
+			if (result.variableNames) {
+				result.variableNames.forEach(name => {
+					if (name !== 'x') allSignals.add(name);
+				});
+			}
+		}
+
+		return `${totalPoints} data points, ${allSignals.size} signals`;
+	}
 </script>
 
 <div class="download-csv">
-	<button 
-		class="download-btn"
-		class:disabled={!resultArray}
-		on:click={downloadCSV}
-		disabled={!resultArray}
-		title="Download simulation results as CSV"
-	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-			<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-			<polyline points="7,10 12,15 17,10"/>
-			<line x1="12" y1="15" x2="12" y2="3"/>
-		</svg>
-		CSV
-	</button>
-
-	{#if hasComplexData}
-		<button 
-			class="options-btn"
-			class:active={showOptions}
-			on:click={toggleOptions}
-			title="Download options"
-		>
-			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<circle cx="12" cy="12" r="3"/>
-				<path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/>
-			</svg>
-		</button>
-	{/if}
-</div>
-
-{#if showOptions && hasComplexData}
-	<div class="options-panel">
-		<div class="option-group">
-			<label class="option-item">
-				<input
-					type="checkbox"
-					bind:checked={includeComplex}
-				/>
-				<span>Include complex data</span>
-			</label>
-			
-			{#if includeComplex}
-				<label class="option-item sub-option">
-					<input
-						type="radio"
-						bind:group={polarFormat}
-						value={false}
-						name="complex-format"
-					/>
-					<span>Rectangular (Real/Imaginary)</span>
-				</label>
-				
-				<label class="option-item sub-option">
-					<input
-						type="radio"
-						bind:group={polarFormat}
-						value={true}
-						name="complex-format"
-					/>
-					<span>Polar (Magnitude/Phase)</span>
-				</label>
-			{/if}
-		</div>
+	<div class="info">
+		<span class="data-info">{getDataInfo()}</span>
 	</div>
-{/if}
+	
+	<div class="controls">
+		<input
+			type="text"
+			bind:value={filename}
+			placeholder="filename"
+			class="filename-input"
+			disabled={isGenerating}
+		/>
+		
+		<button
+			type="button"
+			class="download-button"
+			on:click={downloadCSV}
+			disabled={isGenerating || !resultArray || !resultArray.results || resultArray.results.length === 0}
+		>
+			{#if isGenerating}
+				<span class="spinner"></span>
+				Generating...
+			{:else}
+				<svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+					<polyline points="7,10 12,15 17,10"/>
+					<line x1="12" y1="15" x2="12" y2="3"/>
+				</svg>
+				Download CSV
+			{/if}
+		</button>
+	</div>
+</div>
 
 <style>
 	.download-csv {
 		display: flex;
-		align-items: center;
-		gap: 0.25rem;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 1rem;
+		background: var(--bg-secondary, #f8f9fa);
+		border: 1px solid var(--border-color, #dee2e6);
+		border-radius: 8px;
+		font-family: var(--font-mono, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace);
 	}
 
-	.download-btn {
+	.info {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.data-info {
+		font-size: 0.9rem;
+		color: var(--text-muted, #6c757d);
+		font-weight: 500;
+	}
+
+	.controls {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.filename-input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color, #dee2e6);
+		border-radius: 6px;
+		background: var(--bg-primary, #ffffff);
+		color: var(--text-color, #2d3748);
+		font-family: inherit;
+		font-size: 0.9rem;
+		transition: border-color 0.2s ease;
+	}
+
+	.filename-input:focus {
+		outline: none;
+		border-color: var(--primary-color, #3182ce);
+		box-shadow: 0 0 0 3px var(--primary-color-alpha, rgba(49, 130, 206, 0.1));
+	}
+
+	.filename-input:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.download-button {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		background: var(--accent-color);
+		padding: 0.5rem 1rem;
+		background: var(--primary-color, #3182ce);
 		color: white;
 		border: none;
-		border-radius: 4px;
-		font-size: 0.875rem;
+		border-radius: 6px;
+		font-family: inherit;
+		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.2s ease;
+		white-space: nowrap;
 	}
 
-	.download-btn:hover:not(.disabled) {
-		background: var(--accent-color);
-		opacity: 0.9;
+	.download-button:hover:not(:disabled) {
+		background: var(--primary-color-hover, #2c5aa0);
 		transform: translateY(-1px);
 	}
 
-	.download-btn.disabled {
-		background: var(--border-color);
-		color: var(--text-secondary);
-		cursor: not-allowed;
+	.download-button:active:not(:disabled) {
+		transform: translateY(0);
+	}
+
+	.download-button:disabled {
 		opacity: 0.6;
+		cursor: not-allowed;
+		transform: none;
 	}
 
-	.options-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--bg-tertiary);
-		color: var(--text-secondary);
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
-		cursor: pointer;
-		transition: all 0.2s;
+	.download-icon {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
 	}
 
-	.options-btn:hover,
-	.options-btn.active {
-		background: var(--accent-color);
-		color: white;
-		border-color: var(--accent-color);
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid transparent;
+		border-top: 2px solid currentColor;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		flex-shrink: 0;
 	}
 
-	.options-panel {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		z-index: 10;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		padding: 0.75rem;
-		min-width: 200px;
-		margin-top: 0.25rem;
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
-	.option-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+	/* Dark theme */
+	:global(.dark) .download-csv {
+		background: var(--bg-secondary-dark, #2d3748);
+		border-color: var(--border-color-dark, #4a5568);
+		color: var(--text-color-dark, #e2e8f0);
 	}
 
-	.option-item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.875rem;
-		color: var(--text-primary);
-		cursor: pointer;
-		user-select: none;
+	:global(.dark) .data-info {
+		color: var(--text-muted-dark, #a0aec0);
 	}
 
-	.option-item input {
-		margin: 0;
-		cursor: pointer;
+	:global(.dark) .filename-input {
+		background: var(--bg-primary-dark, #1a202c);
+		border-color: var(--border-color-dark, #4a5568);
+		color: var(--text-color-dark, #e2e8f0);
 	}
 
-	.sub-option {
-		margin-left: 1rem;
-		color: var(--text-secondary);
+	:global(.dark) .filename-input:focus {
+		border-color: var(--primary-color-dark, #63b3ed);
+		box-shadow: 0 0 0 3px var(--primary-color-alpha-dark, rgba(99, 179, 237, 0.1));
 	}
 
-	.option-item:hover {
-		color: var(--accent-color);
+	@media (max-width: 768px) {
+		.controls {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.filename-input {
+			flex: none;
+		}
+
+		.download-button {
+			justify-content: center;
+		}
 	}
 </style>

@@ -17,6 +17,7 @@ export type DisplayDataType = {
   index: number; // result index
   color: ColorType;
   visible: boolean;
+  measureWithCursor?: boolean; // Whether to include in cursor measurements
 };
 
 const colorPalette: ColorType[] = [

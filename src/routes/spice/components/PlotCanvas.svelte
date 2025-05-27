@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onMount, createEventDispatcher } from 'svelte';
-	import { browser } from '$app/environment';
+	import { onMount, afterUpdate } from 'svelte';
 	import type { ResultArrayType } from '../lib/simulationArray';
 	import type { DisplayDataType } from '../lib/displayData';
 
@@ -8,436 +7,306 @@
 	export let displayData: DisplayDataType[] = [];
 	export let theme: 'light' | 'dark' = 'dark';
 
-	const dispatch = createEventDispatcher();
-
 	let canvas: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D | null = null;
-	let webglLoaded = false;
-	let webglError = false;
-	let wglp: any = null;
-
-	// WebGL Plot modules
-	let WebglPlotModule: any = null;
-
-	onMount(async () => {
-		if (!browser) return;
-
-		try {
-			// Try to load WebGL Plot
-			const { WebglPlot, ColorRGBA, WebglLine } = await import('webgl-plot');
-			WebglPlotModule = { WebglPlot, ColorRGBA, WebglLine };
-			
-			initializeWebGL();
-			webglLoaded = true;
-			plotWebGL();
-		} catch (error) {
-			console.warn('Failed to load WebGL Plot, using Canvas fallback:', error);
-			webglError = true;
-			initializeCanvas();
-		}
-	});
-
-	function initializeWebGL() {
-		if (!WebglPlotModule || !canvas) return;
-
-		try {
-			wglp = new WebglPlotModule.WebglPlot(canvas);
-			
-			// Set theme colors
-			if (theme === 'dark') {
-				wglp.gClearColor = { r: 0.1, g: 0.1, b: 0.1, a: 1 };
-			} else {
-				wglp.gClearColor = { r: 0.95, g: 0.95, b: 0.95, a: 1 };
-			}
-			
-			// Start render loop
-			const render = () => {
-				if (wglp) {
-					wglp.update();
-				}
-				requestAnimationFrame(render);
-			};
-			render();
-		} catch (error) {
-			console.error('WebGL initialization failed:', error);
-			webglError = true;
-			initializeCanvas();
-		}
-	}
-
-	function initializeCanvas() {
-		if (!canvas) return;
-		ctx = canvas.getContext('2d');
-		plotCanvas();
-	}
-
-	function plotWebGL() {
-		if (!wglp || !WebglPlotModule || !resultArray || !displayData.length) return;
-
-		try {
-			// Clear existing lines
-			wglp.removeDataLines();
-
-			const visibleData = displayData.filter(dd => dd.visible);
-			if (visibleData.length === 0) return;
-
-			// Get first result
-			const result = resultArray.results?.[0];
-			if (!result || !result.data || result.data.length === 0) return;
-
-			// Plot each visible signal
-			visibleData.forEach((dd, index) => {
-				const dataIndex = result.variableNames.indexOf(dd.name);
-				if (dataIndex < 0 || dataIndex >= result.data.length) return;
-
-				const data = result.data[dataIndex];
-				if (!data?.values || data.values.length === 0) return;
-
-				// Convert to real values for plotting
-				let values: number[];
-				if (Array.isArray(data.values) && typeof data.values[0] === 'object') {
-					// Complex data - use magnitude
-					values = (data.values as any[]).map(v => 
-						Math.sqrt((v.re || 0) * (v.re || 0) + (v.im || 0) * (v.im || 0))
-					);
-				} else {
-					values = data.values as number[];
-				}
-
-				if (values.length === 0) return;
-
-				// Create line with color
-				const color = dd.color 
-					? new WebglPlotModule.ColorRGBA(dd.color.r, dd.color.g, dd.color.b, 1)
-					: new WebglPlotModule.ColorRGBA(
-						0.2 + (index * 0.3) % 0.8,
-						0.2 + (index * 0.5) % 0.8,
-						0.2 + (index * 0.7) % 0.8,
-						1
-					);
-
-				const line = new WebglPlotModule.WebglLine(color, values.length);
-
-				// Set data points
-				for (let i = 0; i < values.length; i++) {
-					const x = (i / (values.length - 1)) * 2 - 1; // Normalize to [-1, 1]
-					const y = (values[i] - Math.min(...values)) / (Math.max(...values) - Math.min(...values)) * 2 - 1;
-					line.setX(i, x);
-					line.setY(i, y);
-				}
-
-				wglp.addDataLine(line);
-			});
-		} catch (error) {
-			console.error('WebGL plotting error:', error);
-		}
-	}
-
-	function plotCanvas() {
-		if (!ctx || !canvas || !resultArray || !displayData.length) return;
-
-		// Clear canvas
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		
-		// Set background
-		ctx.fillStyle = theme === 'dark' ? '#1a1a1a' : '#f5f5f5';
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-		const visibleData = displayData.filter(dd => dd.visible);
-		if (visibleData.length === 0) return;
-
-		try {
-			const result = resultArray.results?.[0];
-			if (!result || !result.data || result.data.length === 0) return;
-
-			// Draw each visible signal
-			visibleData.forEach((dd, index) => {
-				const dataIndex = result.variableNames.indexOf(dd.name);
-				if (dataIndex < 0 || dataIndex >= result.data.length || !ctx) return;
-
-				const data = result.data[dataIndex];
-				if (!data?.values || data.values.length === 0) return;
-
-				// Convert to real values
-				let values: number[];
-				if (Array.isArray(data.values) && typeof data.values[0] === 'object') {
-					values = (data.values as any[]).map(v => 
-						Math.sqrt((v.re || 0) * (v.re || 0) + (v.im || 0) * (v.im || 0))
-					);
-				} else {
-					values = data.values as number[];
-				}
-
-				if (values.length === 0) return;
-
-				// Set line color
-				if (dd.color) {
-					ctx.strokeStyle = `rgb(${dd.color.r * 255}, ${dd.color.g * 255}, ${dd.color.b * 255})`;
-				} else {
-					const hue = (index * 60) % 360;
-					ctx.strokeStyle = `hsl(${hue}, 70%, 50%)`;
-				}
-
-				ctx.lineWidth = 2;
-				ctx.beginPath();
-
-				const minVal = Math.min(...values);
-				const maxVal = Math.max(...values);
-				const range = maxVal - minVal || 1;
-
-				// Draw line
-				for (let i = 0; i < values.length; i++) {
-					const x = (i / (values.length - 1)) * canvas.width;
-					const y = canvas.height - ((values[i] - minVal) / range) * canvas.height;
-					
-					if (i === 0) {
-						ctx.moveTo(x, y);
-					} else {
-						ctx.lineTo(x, y);
-					}
-				}
-				ctx.stroke();
-			});
-		} catch (error) {
-			console.error('Canvas plotting error:', error);
-		}
-	}
-
-	// Mouse interaction handlers (for WebGL)
-	function handleMouseDown(event: MouseEvent) {
-		event.preventDefault();
-	}
-
-	function handleMouseMove(event: MouseEvent) {
-		event.preventDefault();
-	}
-
-	function handleMouseUp(event: MouseEvent) {
-		event.preventDefault();
-	}
-
-	function handleWheel(event: WheelEvent) {
-		event.preventDefault();
-	}
-
-	function resetView() {
-		// Reset WebGL view if available
-		if (wglp) {
-			// Reset any transformations
-		}
-	}
-
-	// Reactive updates
-	$: if (wglp && webglLoaded && WebglPlotModule) {
-		plotWebGL();
-	}
-
-	$: if (ctx && webglError) {
-		plotCanvas();
-	}
-
-	// Handle canvas resize
-	function updateCanvasSize() {
-		if (!canvas) return;
-		
-		const rect = canvas.getBoundingClientRect();
-		canvas.width = rect.width * window.devicePixelRatio;
-		canvas.height = rect.height * window.devicePixelRatio;
-		canvas.style.width = rect.width + 'px';
-		canvas.style.height = rect.height + 'px';
-		
-		if (ctx) {
-			ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-			plotCanvas();
-		}
-	}
+	let plotContainer: HTMLDivElement;
+	
+	let width = 800;
+	let height = 400;
+	let margin = { top: 20, right: 60, bottom: 50, left: 60 };
+	
+	// Plot bounds and scales
+	let xMin = 0, xMax = 1, yMin = 0, yMax = 1;
+	let xScale: (x: number) => number;
+	let yScale: (y: number) => number;
 
 	onMount(() => {
 		if (canvas) {
+			ctx = canvas.getContext('2d');
 			updateCanvasSize();
 			window.addEventListener('resize', updateCanvasSize);
-			return () => window.removeEventListener('resize', updateCanvasSize);
+		}
+		
+		return () => {
+			window.removeEventListener('resize', updateCanvasSize);
+		};
+	});
+
+	afterUpdate(() => {
+		if (ctx && resultArray && displayData.length > 0) {
+			drawPlot();
 		}
 	});
+
+	function updateCanvasSize() {
+		if (plotContainer && canvas) {
+			const rect = plotContainer.getBoundingClientRect();
+			width = Math.max(400, rect.width - 40);
+			height = Math.max(300, rect.height - 40);
+			
+			// Set canvas size with device pixel ratio for crisp rendering
+			const dpr = window.devicePixelRatio || 1;
+			canvas.width = width * dpr;
+			canvas.height = height * dpr;
+			canvas.style.width = width + 'px';
+			canvas.style.height = height + 'px';
+			
+			if (ctx) {
+				ctx.scale(dpr, dpr);
+				drawPlot();
+			}
+		}
+	}
+
+	function calculateBounds() {
+		if (!resultArray || resultArray.length === 0) return;
+
+		let dataXMin = Infinity, dataXMax = -Infinity;
+		let dataYMin = Infinity, dataYMax = -Infinity;
+
+		// Find bounds across all visible signals
+		const visibleSignals = displayData.filter(d => d.visible);
+		
+		for (const result of resultArray) {
+			if (!result.data) continue;
+			
+			// X-axis bounds
+			if (result.data.x) {
+				const xData = Array.isArray(result.data.x) ? result.data.x : [result.data.x];
+				dataXMin = Math.min(dataXMin, ...xData);
+				dataXMax = Math.max(dataXMax, ...xData);
+			}
+			
+			// Y-axis bounds for visible signals
+			for (const signal of visibleSignals) {
+				if (result.data[signal.name]) {
+					const yData = Array.isArray(result.data[signal.name]) 
+						? result.data[signal.name] 
+						: [result.data[signal.name]];
+					
+					// Handle complex numbers
+					const realData = yData.map(val => 
+						typeof val === 'object' && val !== null && 'real' in val 
+							? val.real 
+							: typeof val === 'number' ? val : 0
+					);
+					
+					dataYMin = Math.min(dataYMin, ...realData);
+					dataYMax = Math.max(dataYMax, ...realData);
+				}
+			}
+		}
+
+		// Add padding
+		const xPadding = (dataXMax - dataXMin) * 0.05;
+		const yPadding = (dataYMax - dataYMin) * 0.1;
+		
+		xMin = dataXMin - xPadding;
+		xMax = dataXMax + xPadding;
+		yMin = dataYMin - yPadding;
+		yMax = dataYMax + yPadding;
+
+		// Create scale functions
+		xScale = (x: number) => margin.left + ((x - xMin) / (xMax - xMin)) * (width - margin.left - margin.right);
+		yScale = (y: number) => height - margin.bottom - ((y - yMin) / (yMax - yMin)) * (height - margin.top - margin.bottom);
+	}
+
+	function drawPlot() {
+		if (!ctx || !resultArray || resultArray.length === 0) return;
+
+		calculateBounds();
+		
+		// Clear canvas
+		ctx.clearRect(0, 0, width, height);
+		
+		// Set styles based on theme
+		const bgColor = theme === 'dark' ? '#1a202c' : '#ffffff';
+		const gridColor = theme === 'dark' ? '#4a5568' : '#e2e8f0';
+		const textColor = theme === 'dark' ? '#e2e8f0' : '#2d3748';
+		
+		// Draw background
+		ctx.fillStyle = bgColor;
+		ctx.fillRect(0, 0, width, height);
+		
+		// Draw grid and axes
+		drawGrid(gridColor, textColor);
+		
+		// Draw data lines
+		const visibleSignals = displayData.filter(d => d.visible);
+		for (const signal of visibleSignals) {
+			drawSignal(signal);
+		}
+	}
+
+	function drawGrid(gridColor: string, textColor: string) {
+		if (!ctx) return;
+
+		ctx.strokeStyle = gridColor;
+		ctx.lineWidth = 1;
+		ctx.font = '12px monospace';
+		ctx.fillStyle = textColor;
+
+		// Vertical grid lines (X-axis)
+		const xTicks = 8;
+		for (let i = 0; i <= xTicks; i++) {
+			const x = margin.left + (i / xTicks) * (width - margin.left - margin.right);
+			const value = xMin + (i / xTicks) * (xMax - xMin);
+			
+			ctx.beginPath();
+			ctx.moveTo(x, margin.top);
+			ctx.lineTo(x, height - margin.bottom);
+			ctx.stroke();
+			
+			// X-axis labels
+			ctx.textAlign = 'center';
+			ctx.fillText(formatNumber(value), x, height - margin.bottom + 20);
+		}
+
+		// Horizontal grid lines (Y-axis)
+		const yTicks = 6;
+		for (let i = 0; i <= yTicks; i++) {
+			const y = height - margin.bottom - (i / yTicks) * (height - margin.top - margin.bottom);
+			const value = yMin + (i / yTicks) * (yMax - yMin);
+			
+			ctx.beginPath();
+			ctx.moveTo(margin.left, y);
+			ctx.lineTo(width - margin.right, y);
+			ctx.stroke();
+			
+			// Y-axis labels
+			ctx.textAlign = 'right';
+			ctx.fillText(formatNumber(value), margin.left - 10, y + 4);
+		}
+
+		// Draw axes
+		ctx.strokeStyle = textColor;
+		ctx.lineWidth = 2;
+		
+		// X-axis
+		ctx.beginPath();
+		ctx.moveTo(margin.left, height - margin.bottom);
+		ctx.lineTo(width - margin.right, height - margin.bottom);
+		ctx.stroke();
+		
+		// Y-axis
+		ctx.beginPath();
+		ctx.moveTo(margin.left, margin.top);
+		ctx.lineTo(margin.left, height - margin.bottom);
+		ctx.stroke();
+	}
+
+	function drawSignal(signal: DisplayDataType) {
+		if (!ctx || !resultArray) return;
+
+		ctx.strokeStyle = signal.color;
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+
+		let firstPoint = true;
+
+		for (const result of resultArray) {
+			if (!result.data || !result.data.x || !result.data[signal.name]) continue;
+
+			const xData = Array.isArray(result.data.x) ? result.data.x : [result.data.x];
+			const yData = Array.isArray(result.data[signal.name]) 
+				? result.data[signal.name] 
+				: [result.data[signal.name]];
+
+			for (let i = 0; i < Math.min(xData.length, yData.length); i++) {
+				const x = xData[i];
+				const yVal = yData[i];
+				
+				// Handle complex numbers - use real part
+				const y = typeof yVal === 'object' && yVal !== null && 'real' in yVal 
+					? yVal.real 
+					: typeof yVal === 'number' ? yVal : 0;
+
+				const plotX = xScale(x);
+				const plotY = yScale(y);
+
+				if (firstPoint) {
+					ctx.moveTo(plotX, plotY);
+					firstPoint = false;
+				} else {
+					ctx.lineTo(plotX, plotY);
+				}
+			}
+		}
+
+		ctx.stroke();
+	}
+
+	function formatNumber(value: number): string {
+		if (Math.abs(value) >= 1e6) {
+			return (value / 1e6).toFixed(1) + 'M';
+		} else if (Math.abs(value) >= 1e3) {
+			return (value / 1e3).toFixed(1) + 'k';
+		} else if (Math.abs(value) >= 1) {
+			return value.toFixed(2);
+		} else if (Math.abs(value) >= 1e-3) {
+			return (value * 1e3).toFixed(1) + 'm';
+		} else if (Math.abs(value) >= 1e-6) {
+			return (value * 1e6).toFixed(1) + 'μ';
+		} else if (Math.abs(value) >= 1e-9) {
+			return (value * 1e9).toFixed(1) + 'n';
+		} else {
+			return value.toExponential(1);
+		}
+	}
 </script>
 
-<div class="plot-container">
-	<div class="plot-controls">
-		<button class="control-btn" on:click={resetView} title="Reset View" disabled={!webglLoaded}>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-				<path d="M21 3v5h-5"/>
-				<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-				<path d="M3 21v-5h5"/>
-			</svg>
-			Reset
-		</button>
-	</div>
-	
-	{#if webglLoaded}
-		<canvas
-			bind:this={canvas}
-			class="plot-canvas"
-			on:mousedown={handleMouseDown}
-			on:mousemove={handleMouseMove}
-			on:mouseup={handleMouseUp}
-			on:wheel={handleWheel}
-			on:contextmenu|preventDefault
-		></canvas>
-	{:else if webglError}
-		<div class="fallback-plot">
-			<div class="fallback-content">
-				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M3 3v18h18"/>
-					<path d="M7 12l3-3 3 3 5-5"/>
-				</svg>
-				<h3>WebGL Plot Not Available</h3>
-				<p>Unable to load WebGL plotting library.</p>
-				<p>Simulation results can still be downloaded as CSV.</p>
-			</div>
-		</div>
-	{:else}
-		<div class="loading-plot">
-			<div class="loading-content">
-				<div class="loading-spinner"></div>
-				<p>Loading plot...</p>
-			</div>
-		</div>
-	{/if}
-
-	{#if !resultArray && webglLoaded}
+<div class="plot-container" bind:this={plotContainer} class:dark={theme === 'dark'}>
+	{#if !resultArray || resultArray.length === 0}
 		<div class="no-data">
 			<p>No simulation data to display</p>
-			<p class="hint">Run a simulation to see plots here</p>
 		</div>
+	{:else if displayData.filter(d => d.visible).length === 0}
+		<div class="no-data">
+			<p>No signals selected for display</p>
+		</div>
+	{:else}
+		<canvas bind:this={canvas}></canvas>
 	{/if}
 </div>
 
 <style>
 	.plot-container {
+		width: 100%;
+		height: 100%;
+		min-height: 400px;
 		position: relative;
-		width: 100%;
-		height: 100%;
-		min-height: 300px;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
+		background: var(--bg-primary, #ffffff);
+		border: 1px solid var(--border-color, #dee2e6);
+		border-radius: 8px;
 		overflow: hidden;
-		display: flex;
-		flex-direction: column;
 	}
 
-	.plot-controls {
-		display: flex;
-		justify-content: flex-end;
-		padding: 0.5rem;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-color);
+	.plot-container.dark {
+		background: var(--bg-primary-dark, #1a202c);
+		border-color: var(--border-color-dark, #4a5568);
 	}
 
-	.control-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.25rem 0.5rem;
-		background: var(--bg-tertiary);
-		color: var(--text-secondary);
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.control-btn:hover:not(:disabled) {
-		background: var(--accent-color);
-		color: white;
-	}
-
-	.control-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.plot-canvas {
-		flex: 1;
+	canvas {
+		display: block;
 		width: 100%;
 		height: 100%;
-		cursor: crosshair;
-	}
-
-	.plot-canvas:active {
-		cursor: grabbing;
-	}
-
-	.fallback-plot,
-	.loading-plot {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--bg-primary);
-	}
-
-	.fallback-content,
-	.loading-content {
-		text-align: center;
-		color: var(--text-secondary);
-		padding: 2rem;
-	}
-
-	.fallback-content svg {
-		margin-bottom: 1rem;
-		color: var(--text-tertiary);
-	}
-
-	.fallback-content h3 {
-		margin: 0 0 0.5rem 0;
-		color: var(--text-primary);
-		font-size: 1.125rem;
-	}
-
-	.fallback-content p {
-		margin: 0.25rem 0;
-		font-size: 0.875rem;
-	}
-
-	.loading-spinner {
-		width: 32px;
-		height: 32px;
-		border: 3px solid var(--border-color);
-		border-top: 3px solid var(--accent-color);
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		margin: 0 auto 1rem auto;
-	}
-
-	@keyframes spin {
-		0% { transform: rotate(0deg); }
-		100% { transform: rotate(360deg); }
-	}
-
-	.loading-content p {
-		margin: 0;
-		font-size: 0.875rem;
 	}
 
 	.no-data {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		text-align: center;
-		color: var(--text-secondary);
-		pointer-events: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		color: var(--text-muted, #6c757d);
+		font-style: italic;
 	}
 
 	.no-data p {
-		margin: 0.25rem 0;
+		margin: 0;
+		font-size: 1.1rem;
 	}
 
-	.hint {
-		font-size: 0.875rem;
-		opacity: 0.7;
+	.plot-container.dark .no-data {
+		color: var(--text-muted-dark, #a0aec0);
 	}
 </style>
