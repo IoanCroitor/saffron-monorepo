@@ -177,7 +177,7 @@
 		autoPanOnConnect
 		autoPanOnNodeDrag
 		connectionMode={ConnectionMode.Strict}
-		attributionPosition={'top-center'}
+		
 		oninit={() => console.log('on init')}
 		onnodeclick={(event) => console.log('on node click', event)}
 		onnodepointerenter={(event) => console.log('on node enter', event)}
