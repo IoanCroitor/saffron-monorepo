@@ -52,6 +52,10 @@
 		"@supabase/ssr": "^0.6.1",
 		"@supabase/supabase-js": "^2.49.8",
 		"@xyflow/svelte": "^1.0.2",
-		"mode-watcher": "^1.0.7"
+		"comlink": "^4.4.2",
+		"eecircuit-engine": "^1.5.1",
+		"mode-watcher": "^1.0.7",
+		"monaco-editor": "^0.52.2",
+		"webgl-plot": "^0.7.2"
 	}
 }

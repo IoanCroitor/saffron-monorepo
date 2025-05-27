@@ -15,6 +15,12 @@ export default defineConfig({
 		// 	outdir: './src/lib/paraglide'
 		// })
 	],
+	optimizeDeps: {
+		include: ['monaco-editor']
+	},
+	define: {
+		'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
+	},
 	test: {
 		workspace: [
 			{
