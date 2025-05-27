@@ -16,7 +16,6 @@
 	import ComponentsSidebar from './components/ComponentsSidebar.svelte';
 	import PropertiesSidebar from './components/PropertiesSidebar.svelte';
 	import WirePropertiesPanel from './components/WirePropertiesPanel.svelte';
-	import WireToolbar from './components/WireToolbar.svelte';
 	import ResistorNode from './components/nodes/ResistorNode.svelte';
 	import CapacitorNode from './components/nodes/CapacitorNode.svelte';
 	import InductorNode from './components/nodes/InductorNode.svelte';
@@ -82,8 +81,26 @@
 			});
 		}
 		
-		// Always sync edges
+		// Always sync edges and keep selectedWire in sync too
 		edges = [...store.edges];
+		
+		// If a wire is selected, update it to match the store's version
+		if (selectedWire && selectedWire.id) {
+			const updatedEdge = store.edges.find(edge => edge.id === selectedWire.id);
+			if (updatedEdge) {
+				selectedWire = updatedEdge;
+			}
+		}
+	});
+
+	// Keep selectedWire synchronized with store changes
+	$effect(() => {
+		if (selectedWire?.id && edges.length > 0) {
+			const updatedWire = edges.find(edge => edge.id === selectedWire!.id);
+			if (updatedWire && updatedWire !== selectedWire) {
+				selectedWire = updatedWire;
+			}
+		}
 	});
 
 	// Listen for wire selection events
@@ -103,10 +120,19 @@
 
 		// Keyboard shortcuts
 		function handleKeyDown(event: KeyboardEvent) {
+			// Check if the user is typing in an input field
+			const target = event.target as HTMLElement;
+			const isInputField = target.tagName === 'INPUT' || 
+							   target.tagName === 'TEXTAREA' || 
+							   target.isContentEditable ||
+							   target.closest('input') ||
+							   target.closest('textarea');
+			
 			if (event.key === 'Escape') {
 				selectedWire = null;
 				selectedNode = null;
-			} else if (event.key === 'Delete' || event.key === 'Backspace') {
+			} else if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
+				// Only delete components if not typing in an input field
 				if (selectedWire) {
 					circuitStore.removeConnection(selectedWire.id);
 					selectedWire = null;
@@ -127,7 +153,7 @@
 	});
 
 	function onNodeClick(event: any) {
-		selectedNode = event.detail.node;
+		selectedNode = event.node;
 	}
 
 	function onPaneClick() {
@@ -148,16 +174,15 @@
 		circuitStore.addConnection(newEdge);
 	}
 
-	function onNodeDragStart({ event, node }: any) {
+	function onNodeDragStart(params: any) {
 		// Node drag started - no action needed
-		console.log('Drag started for node:', node.id);
 	}
 
-	function onNodeDragStop({ event, node }: any) {
+	function onNodeDragStop(params: any) {
 		// Update the circuitStore with the final position when drag stops
+		const { node } = params;
 		if (node && node.position) {
 			circuitStore.updateNodePosition(node.id, node.position);
-			console.log('Updated position for node:', node.id, node.position);
 		}
 	}
 
@@ -313,10 +338,7 @@
 	<PropertiesSidebar {selectedNode} />
 
 	<!-- Wire Properties Panel (Modal) -->
-	<WirePropertiesPanel bind:selectedWire />
-
-	<!-- Wire Toolbar -->
-	<WireToolbar {selectedWire} />
+	<WirePropertiesPanel bind:selectedWire bind:edges />
 </div>
 
 <style>

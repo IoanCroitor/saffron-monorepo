@@ -105,7 +105,6 @@
 	stroke-width={wireWidth}
 	stroke-dasharray={strokeDasharray()}
 	fill="none"
-	marker-end={selected ? 'url(#selected-arrow)' : 'url(#arrow)'}
 	onclick={onEdgeClick}
 	onkeydown={onKeyDown}
 	role="button"
@@ -127,33 +126,6 @@
 		{data?.label || (selected ? `${wireShape} wire` : '')}
 	</text>
 {/if}
-
-<!-- Arrow markers for connection direction -->
-<defs>
-	<marker
-		id="arrow"
-		markerWidth="8"
-		markerHeight="8"
-		refX="7"
-		refY="3"
-		orient="auto"
-		markerUnits="strokeWidth"
-	>
-		<path d="M0,0 L0,6 L7,3 z" fill={wireColor} />
-	</marker>
-	
-	<marker
-		id="selected-arrow"
-		markerWidth="8"
-		markerHeight="8"
-		refX="7"
-		refY="3"
-		orient="auto"
-		markerUnits="strokeWidth"
-	>
-		<path d="M0,0 L0,6 L7,3 z" fill="#3b82f6" />
-	</marker>
-</defs>
 
 <style>
 	.wire-path {

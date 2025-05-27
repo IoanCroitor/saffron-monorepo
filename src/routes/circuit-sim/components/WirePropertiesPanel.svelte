@@ -4,7 +4,7 @@
 	import type { Edge } from '@xyflow/svelte';
 	import { circuitStore } from '../stores/circuit-store';
 
-	let { selectedWire = $bindable() }: { selectedWire: Edge | null } = $props();
+	let { selectedWire = $bindable(), edges = $bindable() }: { selectedWire: Edge | null, edges: Edge[] } = $props();
 
 	const wireShapes = [
 		{ value: 'straight', label: 'Straight', icon: '─' },
@@ -29,34 +29,105 @@
 
 	function updateWireShape(shape: string) {
 		if (selectedWire) {
+			// Update the store
 			circuitStore.updateWireStyle(selectedWire.id, shape);
+			
+			// Update the local edges array directly for immediate visual feedback
+			edges = edges.map(edge => 
+				edge.id === selectedWire?.id
+					? { 
+						...edge, 
+						data: { 
+							...edge.data, 
+							wireShape: shape 
+						} 
+					}
+					: edge
+			);
+
+			// Update the selectedWire for immediate UI feedback in the panel
+			selectedWire = {
+				...selectedWire,
+				data: { ...selectedWire.data, wireShape: shape }
+			};
 		}
 	}
 
 	function updateWireStyle(style: string) {
 		if (selectedWire) {
+			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
+			
+			// Update the store
 			circuitStore.updateWireStyle(
 				selectedWire.id,
-				(selectedWire.data as any)?.wireShape || 'straight',
+				currentShape,
 				style
 			);
+			
+			// Update the local edges array directly for immediate visual feedback
+			edges = edges.map(edge => 
+				edge.id === selectedWire?.id
+					? { 
+						...edge, 
+						data: { 
+							...edge.data, 
+							wireStyle: style 
+						} 
+					}
+					: edge
+			);
+
+			// Update the selectedWire for immediate UI feedback in the panel
+			selectedWire = {
+				...selectedWire,
+				data: { ...selectedWire.data, wireStyle: style }
+			};
 		}
 	}
 
 	function updateWireColor(color: string) {
 		if (selectedWire) {
+			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
+			const currentStyle = (selectedWire.data as any)?.wireStyle || 'solid';
+			
+			// Update the store
 			circuitStore.updateWireStyle(
 				selectedWire.id,
-				(selectedWire.data as any)?.wireShape || 'straight',
-				(selectedWire.data as any)?.wireStyle || 'solid',
+				currentShape,
+				currentStyle,
 				color
 			);
+			
+			// Update the local edges array directly for immediate visual feedback
+			edges = edges.map(edge => 
+				edge.id === selectedWire?.id
+					? { 
+						...edge, 
+						data: { 
+							...edge.data, 
+							color: color 
+						} 
+					}
+					: edge
+			);
+
+			// Update the selectedWire for immediate UI feedback in the panel
+			selectedWire = {
+				...selectedWire,
+				data: { ...selectedWire.data, color: color }
+			};
 		}
 	}
 
 	function deleteWire() {
 		if (selectedWire) {
+			// Update the store
 			circuitStore.removeConnection(selectedWire.id);
+			
+			// Update the local edges array directly for immediate visual feedback
+			edges = edges.filter(edge => edge.id !== selectedWire?.id);
+			
+			// Clear the selection
 			selectedWire = null;
 		}
 	}

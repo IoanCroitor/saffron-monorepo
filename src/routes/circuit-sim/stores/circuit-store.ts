@@ -272,33 +272,92 @@ function createCircuitStore() {
 	};
 }
 
+
 function getDefaultParameters(type: string): ComponentParameters {
-	switch (type) {
-		case 'resistor':
-			return { resistance: '1k', tolerance: '5%' };
-		case 'capacitor':
-			return { capacitance: '1u', voltage: '25V' };
-		case 'inductor':
-			return { inductance: '1m', current: '1A' };
-		case 'voltageSource':
-			return { voltage: '5V', type: 'DC' };
-		case 'currentSource':
-			return { current: '1A', type: 'DC' };
-		case 'diode':
-			return { type: '1N4148' };
-		case 'transistor':
-			return { type: '2N3904', configuration: 'NPN' };
-		case 'opamp':
-			return { type: 'LM741', gain: '100k', supply: '±15V' };
-		case 'voltmeter':
-			return { range: '10V' };
-		case 'ammeter':
-			return { range: '1A' };
-		case 'probe':
-			return { impedance: '1M' };
-		default:
-			return {};
-	}
+    switch (type) {
+        case 'resistor':
+            return { 
+                resistance: '1k', 
+                tolerance: '5%', 
+                power: '0.25W', 
+                temperature_coefficient: '100' 
+            };
+        case 'capacitor':
+            return { 
+                capacitance: '1μ', 
+                voltage: '25V', 
+                type: 'Ceramic', 
+                esr: '0.1' 
+            };
+        case 'inductor':
+            return { 
+                inductance: '1m', 
+                current: '1A', 
+                dcr: '1', 
+                core_material: 'Ferrite' 
+            };
+        case 'voltageSource':
+            return { 
+                voltage: '5V', 
+                type: 'DC', 
+                frequency: '60', 
+                phase: 0 
+            };
+        case 'currentSource':
+            return { 
+                current: '1A', 
+                type: 'DC' 
+            };
+        case 'diode':
+            return { 
+                type: '1N4148', 
+                forwardVoltage: '0.7', 
+                current: '200m', 
+                reverse_voltage: '100' 
+            };
+        case 'transistor':
+            return { 
+                type: '2N3904', 
+                configuration: 'NPN', 
+                beta: 100, 
+                vce_sat: '0.2' 
+            };
+        case 'opamp':
+            return { 
+                type: 'LM741', 
+                gain: '100k', 
+                supply: '±15V', 
+                gainBandwidth: '1M', 
+                slew_rate: '0.5' 
+            };
+        case 'ground':
+            return { 
+                type: 'Earth', 
+                impedance: '0', 
+                plane_area: 'Large', 
+                via_count: 4 
+            };
+        case 'voltmeter':
+            return { 
+                range: '10V', 
+                impedance: '10M', 
+                accuracy: '1%' 
+            };
+        case 'ammeter':
+            return { 
+                range: '1A', 
+                resistance: '0.1' 
+            };
+        case 'probe':
+            return { 
+                impedance: '1M', 
+                capacitance: '10p', 
+                attenuation: '1x' 
+            };
+        default:
+            return {};
+    }
 }
+
 
 export const circuitStore = createCircuitStore();
