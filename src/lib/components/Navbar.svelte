@@ -18,7 +18,8 @@
 
 	async function handleLogout() {
 		await logout();
-		// No need to call goto('/') as the server will redirect
+		goto('/'); // Redirect to home after logout
+		
 	}
 
 	function handleProfile() {

@@ -9,9 +9,15 @@
 
 	let { children, data } = $props();
 
-	// Reactively update auth state when data changes
+	// Initialize auth state when component mounts and data changes
 	$effect(() => {
-		if (browser && data.session !== undefined && data.user !== undefined) {
+		if (browser) {
+			// Always call initializeAuth, even with null values
+			// This ensures the stores are properly set on the client
+			console.log('Layout effect triggered with data:', { 
+				hasSession: !!data.session, 
+				hasUser: !!data.user 
+			});
 			initializeAuth(data.session, data.user);
 		}
 	});

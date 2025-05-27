@@ -12,6 +12,10 @@ export const currentUser = writable<User | null>(null);
 export const isLoggedIn = writable<boolean>(false);
 export const sessionStore = writable<Session | null>(null);
 
+// Flag to prevent duplicate initializations
+let isInitializing = false;
+let hasInitialized = false;
+
 // Initialize Supabase client
 const supabase = createSupabaseBrowserClient();
 
@@ -112,6 +116,8 @@ export async function signup(email: string, password: string, name: string): Pro
 // For server-side logout, we'll use a form submission
 export async function logout(): Promise<void> {
 	try {
+		console.log('Starting logout process');
+		
 		// Use fetch to call the server logout endpoint
 		const response = await fetch('/logout', {
 			method: 'POST',
@@ -125,9 +131,11 @@ export async function logout(): Promise<void> {
 			window.location.href = response.url;
 		} else {
 			// Clear local state immediately
+			console.log('Clearing local auth state');
 			currentUser.set(null);
 			isLoggedIn.set(false);
 			sessionStore.set(null);
+			hasInitialized = true; // Keep as initialized but logged out
 		}
 	} catch (error) {
 		console.error('Logout error:', error);
@@ -136,46 +144,71 @@ export async function logout(): Promise<void> {
 		currentUser.set(null);
 		isLoggedIn.set(false);
 		sessionStore.set(null);
+		hasInitialized = true;
 	}
 }
 
 // Initialize auth state from session (using secure user data)
 export async function initializeAuth(initialSession: Session | null, initialUser: SupabaseUser | null) {
-	if (initialSession && initialUser) {
-		sessionStore.set(initialSession);
-		
-		// Get profile data using the authenticated user
-		try {
-			const { data: profile } = await supabase
-				.from('profiles')
-				.select('*')
-				.eq('id', initialUser.id)
-				.single();
+	// Prevent duplicate initialization
+	if (isInitializing) {
+		console.log('Auth initialization already in progress, skipping...');
+		return;
+	}
+	
+	isInitializing = true;
+	
+	console.log('Initializing auth with:', { 
+		hasSession: !!initialSession, 
+		hasUser: !!initialUser, 
+		userId: initialUser?.id,
+		hasInitialized
+	});
+	
+	try {
+		if (initialSession && initialUser) {
+			sessionStore.set(initialSession);
+			
+			// Get profile data using the authenticated user
+			try {
+				const { data: profile } = await supabase
+					.from('profiles')
+					.select('*')
+					.eq('id', initialUser.id)
+					.single();
 
-			const user: User = {
-				id: initialUser.id,
-				email: initialUser.email || '',
-				name: profile?.name || initialUser.user_metadata?.name || 'User'
-			};
-			
-			currentUser.set(user);
-			isLoggedIn.set(true);
-		} catch (error) {
-			console.error('Error getting profile:', error);
-			// Fallback to basic user data
-			const user: User = {
-				id: initialUser.id,
-				email: initialUser.email || '',
-				name: initialUser.user_metadata?.name || 'User'
-			};
-			
-			currentUser.set(user);
-			isLoggedIn.set(true);
+				const user: User = {
+					id: initialUser.id,
+					email: initialUser.email || '',
+					name: profile?.name || initialUser.user_metadata?.name || 'User'
+				};
+				
+				console.log('Setting user as logged in:', user);
+				currentUser.set(user);
+				isLoggedIn.set(true);
+			} catch (error) {
+				console.error('Error getting profile:', error);
+				// Fallback to basic user data
+				const user: User = {
+					id: initialUser.id,
+					email: initialUser.email || '',
+					name: initialUser.user_metadata?.name || 'User'
+				};
+				
+				console.log('Setting user as logged in (fallback):', user);
+				currentUser.set(user);
+				isLoggedIn.set(true);
+			}
+		} else {
+			console.log('Setting user as logged out');
+			currentUser.set(null);
+			isLoggedIn.set(false);
+			sessionStore.set(null);
 		}
-	} else {
-		currentUser.set(null);
-		isLoggedIn.set(false);
-		sessionStore.set(null);
+		
+		hasInitialized = true;
+	} finally {
+		isInitializing = false;
 	}
 }
 
@@ -186,23 +219,45 @@ export function initializeAuthFromServer(session: Session | null, user: Supabase
 	}
 }
 
+// Force refresh auth state (useful for debugging)
+export function forceRefreshAuth() {
+	console.log('Forcing auth state refresh');
+	hasInitialized = false;
+	isInitializing = false;
+}
+
 // Listen for auth state changes
 if (typeof window !== 'undefined') {
 	supabase.auth.onAuthStateChange(async (event, session) => {
+		console.log('Auth state change:', { event, hasSession: !!session, hasInitialized });
+		
+		// Only handle auth changes if we've completed initial server-side initialization
+		// This prevents conflicts between server and client state
+		if (!hasInitialized) {
+			console.log('Skipping auth state change - not yet initialized from server');
+			return;
+		}
+		
 		if (event === 'SIGNED_IN' && session) {
 			// Use getUser() for authenticated user data instead of session.user
 			const { data: { user }, error } = await supabase.auth.getUser();
 			if (user && !error) {
+				// Reset the initialization flag to allow this update
+				hasInitialized = false;
 				await initializeAuth(session, user);
 			}
 		} else if (event === 'SIGNED_OUT') {
+			console.log('Handling sign out event');
 			currentUser.set(null);
 			isLoggedIn.set(false);
 			sessionStore.set(null);
+			hasInitialized = true; // Keep as initialized but logged out
 		} else if (event === 'TOKEN_REFRESHED' && session) {
 			// Also refresh user data when token is refreshed
 			const { data: { user }, error } = await supabase.auth.getUser();
 			if (user && !error) {
+				// Reset the initialization flag to allow this update
+				hasInitialized = false;
 				await initializeAuth(session, user);
 			}
 		}
