@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import SpiceEditor from './components/SpiceEditor.svelte';
 	import PlotCanvas from './components/PlotCanvas.svelte';
+	import D3PlotCanvas from './components/D3PlotCanvas.svelte';
 	import DisplayBox from './components/DisplayBox.svelte';
 	import DownloadCSV from './components/DownloadCSV.svelte';
 	import { SimArray, type ResultArrayType } from './lib/simulationArray';
@@ -32,6 +33,7 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	let theme: 'light' | 'dark' = 'dark';
 	let simArray: SimArray;
 	let isInitialized = false;
+	let plotType: 'webgl' | 'd3' = 'd3'; // Default to D3 for better compatibility
 
 	onMount(async () => {
 		if (browser) {
@@ -167,18 +169,46 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		<div class="results-section">
 			<div class="section-header">
 				<h2>Simulation Results</h2>
-				{#if resultArray}
-					<DownloadCSV {resultArray} />
-				{/if}
+				<div class="header-controls">
+					{#if resultArray}
+						<div class="plot-type-selector">
+							<label>
+								<input 
+									type="radio" 
+									bind:group={plotType} 
+									value="d3" 
+								/>
+								D3.js
+							</label>
+							<label>
+								<input 
+									type="radio" 
+									bind:group={plotType} 
+									value="webgl" 
+								/>
+								WebGL
+							</label>
+						</div>
+						<DownloadCSV {resultArray} />
+					{/if}
+				</div>
 			</div>
 			
 			{#if resultArray}
 				<div class="results-content">
-					<PlotCanvas 
-						{resultArray}
-						{displayData}
-						{theme}
-					/>
+					{#if plotType === 'd3'}
+						<D3PlotCanvas 
+							{resultArray}
+							{displayData}
+							{theme}
+						/>
+					{:else}
+						<PlotCanvas 
+							{resultArray}
+							{displayData}
+							{theme}
+						/>
+					{/if}
 					
 					<DisplayBox 
 						{resultArray}
@@ -352,6 +382,68 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		font-size: 1.2rem;
 		font-weight: 500;
 		color: var(--text-primary);
+	}
+
+	.header-controls {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.plot-type-selector {
+		display: flex;
+		gap: 1rem;
+		padding: 0.5rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-color);
+		border-radius: 6px;
+	}
+
+	.plot-type-selector label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		padding: 0.25rem 0.75rem;
+		border-radius: 4px;
+		transition: background-color 0.2s;
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+	}
+
+	.plot-type-selector label:hover {
+		background: var(--bg-secondary);
+	}
+
+	.plot-type-selector input[type="radio"] {
+		margin: 0;
+		accent-color: var(--primary-color);
+	}
+
+	.plot-type-selector input[type="radio"]:checked + span {
+		color: var(--text-primary);
+		font-weight: 500;
+	}
+
+	.plot-type-selector label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		transition: background-color 0.2s;
+	}
+
+	.plot-type-selector label:hover {
+		background: var(--bg-secondary);
+	}
+
+	.plot-type-selector input[type="radio"] {
+		margin: 0;
+		accent-color: var(--accent-color);
 	}
 
 	.results-content {

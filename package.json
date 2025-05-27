@@ -51,8 +51,10 @@
 	"dependencies": {
 		"@supabase/ssr": "^0.6.1",
 		"@supabase/supabase-js": "^2.49.8",
+		"@types/d3": "^7.4.3",
 		"@xyflow/svelte": "^1.0.2",
 		"comlink": "^4.4.2",
+		"d3": "^7.9.0",
 		"eecircuit-engine": "^1.5.1",
 		"mode-watcher": "^1.0.7",
 		"monaco-editor": "^0.52.2",
