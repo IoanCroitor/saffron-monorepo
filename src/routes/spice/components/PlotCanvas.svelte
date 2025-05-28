@@ -20,6 +20,10 @@
 	let xScale: (x: number) => number;
 	let yScale: (y: number) => number;
 
+	// Fullscreen state
+	let isChartFullscreen = false;
+	let chartWrapper: HTMLDivElement;
+
 	onMount(() => {
 		if (canvas) {
 			ctx = canvas.getContext('2d');
@@ -253,9 +257,60 @@
 			return value.toExponential(1);
 		}
 	}
+
+	function toggleChartFullscreen() {
+		if (!isChartFullscreen) {
+			if (chartWrapper.requestFullscreen) {
+				chartWrapper.requestFullscreen();
+				isChartFullscreen = true;
+			}
+		} else {
+			if (document.exitFullscreen) {
+				document.exitFullscreen();
+				isChartFullscreen = false;
+			}
+		}
+	}
+
+	function handleChartFullscreenChange() {
+		isChartFullscreen = document.fullscreenElement === chartWrapper;
+		// Trigger resize to adjust plot after fullscreen change
+		if (plotContainer) {
+			setTimeout(() => updateCanvasSize(), 100);
+		}
+	}
 </script>
 
-<div class="plot-container" bind:this={plotContainer} class:dark={theme === 'dark'}>
+<svelte:window on:fullscreenchange={handleChartFullscreenChange} />
+
+<div class="plot-container" bind:this={chartWrapper} class:fullscreen={isChartFullscreen} data-theme={theme}>
+	<div class="plot-header">
+		<h3>WebGL Plot</h3>
+		<div class="plot-controls">
+			<button 
+				class="control-btn"
+				on:click={toggleChartFullscreen}
+				title={isChartFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+			>
+				{#if isChartFullscreen}
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+						<path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+						<path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+						<path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+					</svg>
+				{:else}
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+						<path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+						<path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+						<path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+					</svg>
+				{/if}
+			</button>
+		</div>
+	</div>
+	<div class="plot-content" bind:this={plotContainer} class:dark={theme === 'dark'}>
 	{#if !resultArray || resultArray.length === 0}
 		<div class="no-data">
 			<p>No simulation data to display</p>
@@ -267,10 +322,13 @@
 	{:else}
 		<canvas bind:this={canvas}></canvas>
 	{/if}
+	</div>
 </div>
 
 <style>
 	.plot-container {
+		display: flex;
+		flex-direction: column;
 		width: 100%;
 		height: 100%;
 		min-height: 400px;
@@ -281,9 +339,69 @@
 		overflow: hidden;
 	}
 
+	.plot-container.fullscreen {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw !important;
+		height: 100vh !important;
+		z-index: 9999;
+		border-radius: 0;
+		border: none;
+	}
+
 	.plot-container.dark {
 		background: var(--bg-primary-dark, #1a202c);
 		border-color: var(--border-color-dark, #4a5568);
+	}
+
+	.plot-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		background: var(--bg-secondary, #f8f9fa);
+		border-bottom: 1px solid var(--border-color, #dee2e6);
+		min-height: 60px;
+	}
+
+	.plot-header h3 {
+		margin: 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-primary, #212529);
+	}
+
+	.plot-controls {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.control-btn {
+		padding: 0.5rem;
+		background: var(--bg-primary, #ffffff);
+		border: 1px solid var(--border-color, #dee2e6);
+		border-radius: 4px;
+		color: var(--text-secondary, #6c757d);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.control-btn:hover {
+		background: var(--bg-secondary, #f8f9fa);
+		color: var(--text-primary, #212529);
+		border-color: var(--accent-color, #007bff);
+	}
+
+	.plot-content {
+		flex: 1;
+		position: relative;
+		overflow: hidden;
+		min-height: 0;
 	}
 
 	canvas {
@@ -294,16 +412,45 @@
 
 	.no-data {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		height: 100%;
 		color: var(--text-muted, #6c757d);
 		font-style: italic;
+		text-align: center;
+		padding: 2rem;
 	}
 
 	.no-data p {
-		margin: 0;
+		margin: 0.25rem 0;
 		font-size: 1.1rem;
+	}
+
+	.plot-container.dark {
+		background: var(--bg-primary-dark, #1a202c);
+		border-color: var(--border-color-dark, #4a5568);
+	}
+
+	.plot-container.dark .plot-header {
+		background: var(--bg-secondary-dark, #2d3748);
+		border-bottom-color: var(--border-color-dark, #4a5568);
+	}
+
+	.plot-container.dark .plot-header h3 {
+		color: var(--text-primary-dark, #f7fafc);
+	}
+
+	.plot-container.dark .control-btn {
+		background: var(--bg-primary-dark, #1a202c);
+		border-color: var(--border-color-dark, #4a5568);
+		color: var(--text-secondary-dark, #a0aec0);
+	}
+
+	.plot-container.dark .control-btn:hover {
+		background: var(--bg-secondary-dark, #2d3748);
+		color: var(--text-primary-dark, #f7fafc);
+		border-color: var(--accent-color, #007bff);
 	}
 
 	.plot-container.dark .no-data {

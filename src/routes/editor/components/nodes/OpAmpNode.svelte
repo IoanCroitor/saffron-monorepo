@@ -8,7 +8,7 @@
 	export let selected: boolean = false;
 </script>
 
-<div class="op-amp-node relative bg-white border-2 border-slate-400 rounded-lg shadow-lg min-w-[80px] min-h-[60px] p-2 {selected ? 'ring-2 ring-blue-500' : ''}">
+<div class="op-amp-node relative bg-slate-50 border-2 border-slate-300 rounded-lg shadow-lg min-w-[80px] min-h-[60px] p-2 {selected ? 'ring-2 ring-slate-500 border-slate-400' : ''}">
 	<!-- Op-Amp Triangle Shape -->
 	<div class="relative w-16 h-12 flex items-center justify-center">
 		<svg width="64" height="48" viewBox="0 0 64 48" class="text-slate-700">
@@ -80,7 +80,21 @@
 		transition: all 0.2s ease;
 	}
 	
-	.op-amp-node:hover {
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	/* Dark mode */
+	:global(.dark) .op-amp-node {
+		background: #374151 !important;
+		border-color: #4b5563 !important;
+	}
+	
+	:global(.dark) .op-amp-node svg {
+		color: #d1d5db !important;
+	}
+	
+	:global(.dark) .op-amp-node .text-slate-700 {
+		color: #d1d5db !important;
+	}
+	
+	:global(.dark) .op-amp-node .text-slate-500 {
+		color: #9ca3af !important;
 	}
 </style>

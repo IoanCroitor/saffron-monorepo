@@ -18,19 +18,14 @@
 
 <style>
 	.ground-node {
-		background: white;
-		border: 2px solid #e5e7eb;
+		background: #f8fafc;
+		border: 2px solid #e2e8f0;
 		border-radius: 8px;
 		padding: 6px;
 		min-width: 60px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
-	}
-
-	.ground-node:hover {
-		border-color: #6b7280;
-		box-shadow: 0 4px 12px rgba(107, 114, 128, 0.15);
 	}
 
 	.ground-node.selected {
@@ -65,19 +60,10 @@
 		top: -6px;
 	}
 
-	:global(.handle-top:hover) {
-		background: #374151;
-		transform: scale(1.2);
-	}
-
 	/* Dark mode */
 	:global(.dark) .ground-node {
-		background: #1f2937;
-		border-color: #374151;
-	}
-
-	:global(.dark) .ground-node:hover {
-		border-color: #9ca3af;
+		background: #374151;
+		border-color: #4b5563;
 	}
 
 	:global(.dark) .ground-node.selected {

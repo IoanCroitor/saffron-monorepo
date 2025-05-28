@@ -8,10 +8,10 @@
 	export let selected: boolean = false;
 </script>
 
-<div class="current-source-node relative bg-white border-2 border-yellow-400 rounded-lg shadow-lg min-w-[100px] min-h-[60px] p-3 {selected ? 'ring-2 ring-blue-500' : ''}">
+<div class="current-source-node relative bg-slate-50 dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg min-w-[100px] min-h-[60px] p-3 {selected ? 'ring-2 ring-yellow-500 border-yellow-400' : ''}">>
 	<!-- Current Source Symbol -->
 	<div class="relative w-16 h-12 flex items-center justify-center">
-		<svg width="64" height="48" viewBox="0 0 64 48" class="text-yellow-600">
+		<svg width="64" height="48" viewBox="0 0 64 48" class="text-yellow-600 dark:text-yellow-400">
 			<circle cx="32" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="2"/>
 			<!-- Arrow indicating current direction -->
 			<path d="M24 24 L40 24" stroke="currentColor" stroke-width="2" marker-end="url(#arrow-current)"/>
@@ -29,12 +29,12 @@
 	</div>
 
 	<!-- Component Label -->
-	<div class="text-xs font-medium text-center text-yellow-700 mt-1">
+	<div class="text-xs font-medium text-center text-yellow-700 dark:text-yellow-300 mt-1">
 		{data.label || 'I'}
 	</div>
 
 	<!-- Value Display -->
-	<div class="text-xs text-center text-yellow-600">
+	<div class="text-xs text-center text-yellow-600 dark:text-yellow-400">
 		{data.parameters?.current || '1A'}
 	</div>
 
@@ -54,9 +54,5 @@
 <style>
 	.current-source-node {
 		transition: all 0.2s ease;
-	}
-	
-	.current-source-node:hover {
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 </style>

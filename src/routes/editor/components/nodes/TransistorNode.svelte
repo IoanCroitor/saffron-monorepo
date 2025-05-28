@@ -24,19 +24,14 @@
 
 <style>
 	.transistor-node {
-		background: white;
-		border: 2px solid #e5e7eb;
+		background: #f8fafc;
+		border: 2px solid #e2e8f0;
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
-	}
-
-	.transistor-node:hover {
-		border-color: #10b981;
-		box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 	}
 
 	.transistor-node.selected {
@@ -79,13 +74,6 @@
 		border-radius: 50%;
 	}
 
-	:global(.handle-base:hover),
-	:global(.handle-collector:hover),
-	:global(.handle-emitter:hover) {
-		background: #10b981;
-		transform: scale(1.2);
-	}
-
 	:global(.handle-base) {
 		left: -6px;
 	}
@@ -102,12 +90,8 @@
 
 	/* Dark mode */
 	:global(.dark) .transistor-node {
-		background: #1f2937;
-		border-color: #374151;
-	}
-
-	:global(.dark) .transistor-node:hover {
-		border-color: #34d399;
+		background: #374151;
+		border-color: #4b5563;
 	}
 
 	:global(.dark) .transistor-node.selected {

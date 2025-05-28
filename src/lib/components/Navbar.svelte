@@ -42,13 +42,13 @@
 
 <svelte:window on:click={handleClickOutside} />
 
-<nav class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+<nav class="sticky top-0 z-50 w-full border-b bg-muted text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-muted/60">
 	<div class="container mx-auto flex h-16 items-center justify-between px-4">
 		<!-- Logo/Brand -->
 		<div class="flex items-center space-x-4">
-			<a href="/" class="flex items-center space-x-2">
-				<div class="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-					<span class="text-primary-foreground font-bold text-lg">S</span>
+			<a href="/" class="flex items-center space-x-1">
+				<div class=" rounded-lg flex items-center justify-center">
+					<span class="font-bold text-lg">🌺</span>
 				</div>
 				<span class="font-bold text-xl">Saffron</span>
 			</a>

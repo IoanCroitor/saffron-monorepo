@@ -39,6 +39,10 @@
 	// Signal data for snapping measurements
 	let signalData: { name: string, data: { x: number, y: number }[], color: string }[] = [];
 
+	// Fullscreen state
+	let isChartFullscreen = false;
+	let chartWrapper: HTMLDivElement;
+
 	onMount(() => {
 		initializePlot();
 		// Set up resize observer for responsive behavior
@@ -985,11 +989,33 @@
 				.call(zoomBehavior.transform, d3.zoomIdentity);
 		}
 	}
+
+	function toggleChartFullscreen() {
+		if (!isChartFullscreen) {
+			if (chartWrapper.requestFullscreen) {
+				chartWrapper.requestFullscreen();
+				isChartFullscreen = true;
+			}
+		} else {
+			if (document.exitFullscreen) {
+				document.exitFullscreen();
+				isChartFullscreen = false;
+			}
+		}
+	}
+
+	function handleChartFullscreenChange() {
+		isChartFullscreen = document.fullscreenElement === chartWrapper;
+		// Trigger resize to adjust plot after fullscreen change
+		if (plotContainer) {
+			setTimeout(() => handleResize(), 100);
+		}
+	}
 </script>
 
-<svelte:window on:resize={handleResize} on:keydown={handleKeydown} />
+<svelte:window on:resize={handleResize} on:keydown={handleKeydown} on:fullscreenchange={handleChartFullscreenChange} />
 
-<div class="d3-plot-container">
+<div class="d3-plot-container" bind:this={chartWrapper} class:fullscreen={isChartFullscreen}>
 	<div class="plot-header">
 		<h3>Simulation Results</h3>
 		<div class="plot-controls">
@@ -1008,6 +1034,28 @@
 					<path d="M12 2v20"/>
 					<path d="M2 12h20"/>
 				</svg>
+			</button>
+			<!-- svelte-ignore a11y_consider_explicit_label -->
+			<button 
+				class="control-btn"
+				on:click={toggleChartFullscreen}
+				title={isChartFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+			>
+				{#if isChartFullscreen}
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+						<path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+						<path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+						<path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+					</svg>
+				{:else}
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+						<path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+						<path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+						<path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+					</svg>
+				{/if}
 			</button>
 			<!-- svelte-ignore a11y_consider_explicit_label -->
 			<button class="control-btn" class:active={showGrid} on:click={() => showGrid = !showGrid} title="Toggle Grid">
@@ -1110,6 +1158,18 @@
 		border-radius: 4px;
 		height: 100%;
 		min-height: 400px;
+		position: relative;
+	}
+
+	.d3-plot-container.fullscreen {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw !important;
+		height: 100vh !important;
+		z-index: 9999;
+		border-radius: 0;
+		border: none;
 	}
 
 	.plot-header {

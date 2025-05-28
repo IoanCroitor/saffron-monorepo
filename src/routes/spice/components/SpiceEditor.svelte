@@ -8,6 +8,9 @@
 
 	const dispatch = createEventDispatcher<{ change: string }>();
 
+	let isEditorFullscreen = false;
+	let editorWrapper: HTMLDivElement;
+
 	let editorContainer: HTMLDivElement;
 	let textareaElement: HTMLTextAreaElement;
 	let editor: any = null;
@@ -108,9 +111,41 @@
 		value = target.value;
 		dispatch('change', value);
 	}
+
+	function toggleEditorFullscreen() {
+		if (!isEditorFullscreen) {
+			if (editorWrapper.requestFullscreen) {
+				editorWrapper.requestFullscreen();
+				isEditorFullscreen = true;
+			}
+		} else {
+			if (document.exitFullscreen) {
+				document.exitFullscreen();
+				isEditorFullscreen = false;
+			}
+		}
+	}
+
+	function handleEditorFullscreenChange() {
+		isEditorFullscreen = document.fullscreenElement === editorWrapper;
+	}
 </script>
 
-<div class="editor-wrapper">
+<div class="editor-wrapper" bind:this={editorWrapper} class:fullscreen={isEditorFullscreen}>
+	<div class="editor-header">
+		<span class="editor-title">SPICE Netlist Editor</span>
+		<button 
+			class="editor-fullscreen-btn"
+			on:click={toggleEditorFullscreen}
+			title={isEditorFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+		>
+			{#if isEditorFullscreen}
+				⚏
+			{:else}
+				⛶
+			{/if}
+		</button>
+	</div>
 	{#if monacoLoaded}
 		<div bind:this={editorContainer} class="editor-container"></div>
 	{:else if monacoError}
@@ -133,6 +168,8 @@
 	{/if}
 </div>
 
+<svelte:window on:fullscreenchange={handleEditorFullscreenChange} />
+
 <style>
 	.editor-wrapper {
 		width: 100%;
@@ -140,12 +177,70 @@
 		min-height: 400px;
 		display: flex;
 		flex-direction: column;
+		position: relative;
+		border: 1px solid #404040;
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.editor-wrapper.fullscreen {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw !important;
+		height: 100vh !important;
+		z-index: 9999;
+		background: var(--bg-primary, #1e1e1e);
+		border-radius: 0;
+	}
+
+	.editor-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.5rem 1rem;
+		background: var(--bg-secondary, #2d2d2d);
+		border-bottom: 1px solid var(--border-color, #404040);
+		color: var(--text-primary, #d4d4d4);
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	.editor-title {
+		user-select: none;
+	}
+
+	.editor-fullscreen-btn {
+		padding: 0.25rem 0.5rem;
+		background: transparent;
+		color: var(--text-secondary, #b5b5b5);
+		border: 1px solid var(--border-color, #404040);
+		border-radius: 4px;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 32px;
+		height: 32px;
+	}
+
+	.editor-fullscreen-btn:hover {
+		background: var(--bg-tertiary, #3d3d3d);
+		color: var(--text-primary, #d4d4d4);
+		border-color: var(--accent-color, #4f9eff);
 	}
 
 	.editor-container {
 		width: 100%;
 		height: 100%;
 		min-height: 400px;
+		flex: 1;
+	}
+
+	.editor-wrapper.fullscreen .editor-container {
+		min-height: calc(100vh - 60px);
 	}
 
 	.textarea-editor {
@@ -153,6 +248,11 @@
 		height: 100%;
 		min-height: 400px;
 		position: relative;
+		flex: 1;
+	}
+
+	.editor-wrapper.fullscreen .textarea-editor {
+		min-height: calc(100vh - 60px);
 	}
 
 	.spice-textarea {
@@ -160,8 +260,8 @@
 		height: 100%;
 		min-height: 400px;
 		padding: 1rem;
-		border: 1px solid #404040;
-		border-radius: 4px;
+		border: none;
+		border-radius: 0;
 		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 		font-size: 14px;
 		line-height: 1.5;
@@ -179,12 +279,10 @@
 	.textarea-editor[data-theme="light"] .spice-textarea {
 		background: #ffffff;
 		color: #000000;
-		border-color: #d0d7de;
 	}
 
 	.spice-textarea:focus {
-		border-color: #4f9eff;
-		box-shadow: 0 0 0 2px rgba(79, 158, 255, 0.2);
+		box-shadow: none;
 	}
 
 	.loading-container {
@@ -195,8 +293,12 @@
 		align-items: center;
 		justify-content: center;
 		background: #f5f5f5;
-		border: 1px solid #d0d7de;
-		border-radius: 4px;
+		border-radius: 0;
+		flex: 1;
+	}
+
+	.editor-wrapper.fullscreen .loading-container {
+		min-height: calc(100vh - 60px);
 	}
 
 	.loading-text {

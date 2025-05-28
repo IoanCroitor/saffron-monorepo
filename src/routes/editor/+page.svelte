@@ -33,6 +33,7 @@
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
 	import { circuitStore } from './stores/circuit-store';
+	import { settingsStore } from './stores/settings-store';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
@@ -559,16 +560,14 @@
 
 <svelte:head>
 	<title>Circuit Simulator - Saffron</title>
-</svelte:head>
-
-<div class="h-[calc(100vh-4rem)] w-full flex flex-col bg-background overflow-hidden">
+</svelte:head>	<div class="h-[calc(100vh-4rem)] w-full flex flex-col bg-background overflow-hidden">
 	<!-- Toolbar -->
-	<div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between flex-shrink-0">
+	<div class="bg-card border-b border-border px-4 py-2 flex items-center justify-between flex-shrink-0">
 		<div class="flex items-center space-x-4">
-			<h1 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+			<h1 class="text-lg font-semibold text-card-foreground flex items-center">
 				{currentProjectName}
 				{#if hasUnsavedChanges}
-					<span class="ml-2 text-orange-500 text-sm">●</span>
+					<span class="ml-2 text-destructive text-sm">●</span>
 				{/if}
 			</h1>
 		</div>
@@ -576,7 +575,7 @@
 		<div class="flex items-center space-x-2">
 			<button
 				onclick={handleNew}
-				class="flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+				class="flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground bg-secondary border border-border rounded-md hover:bg-secondary/80 transition-colors"
 				title="New Circuit (Ctrl+N)"
 			>
 				<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -587,7 +586,7 @@
 			
 			<button
 				onclick={handleLoad}
-				class="flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+				class="flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground bg-secondary border border-border rounded-md hover:bg-secondary/80 transition-colors"
 				title="Load Circuit (Ctrl+O)"
 			>
 				<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -598,7 +597,7 @@
 			
 			<button
 				onclick={handleSave}
-				class="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+				class="flex items-center px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary border border-primary rounded-md hover:bg-primary/90 transition-colors"
 				title="Save Circuit (Ctrl+S)"
 			>
 				<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -609,7 +608,7 @@
 			
 			<button
 				onclick={() => showCollaborationDialog = true}
-				class="flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+				class="flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground bg-secondary border border-border rounded-md hover:bg-secondary/80 transition-colors"
 				title="Collaborative Editing"
 			>
 				<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -617,7 +616,7 @@
 				</svg>
 				Collaborate
 				{#if collaboratorCount > 0}
-					<span class="ml-1 bg-green-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+					<span class="ml-1 bg-chart-2 text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
 						{collaboratorCount}
 					</span>
 				{/if}
@@ -625,7 +624,7 @@
 		</div>
 	</div>
 
-	<div class="flex-1 flex bg-background min-h-0 overflow-hidden">
+	<div class="flex-1 flex bg-background min-h-0 overflow-hidden" class:colored-handles={$settingsStore.coloredHandles}>
 	<!-- Left Sidebar - Components -->
 	<ComponentsSidebar />
 	
@@ -649,10 +648,10 @@
 				selectedWire = edge;
 				selectedNode = null;
 			}}
-			class="bg-white dark:bg-gray-900"
+			class="bg-background"
 		>
 		
-			<Background variant={BackgroundVariant.Dots} />
+			<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
 			<MiniMap 
 				position="bottom-left"
 				nodeColor={(node) => {
@@ -667,50 +666,50 @@
 			/>
 
 			<!-- Status Panel -->
-			<Panel position="bottom-right" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm">
+			<Panel position="bottom-right" class="bg-card border border-border rounded-lg p-3 text-sm">
 				{#if selectedWire}
-					<div class="text-blue-600 dark:text-blue-400 font-medium">
+					<div class="text-primary font-medium">
 						Wire Selected: {selectedWire.id}
 					</div>
-					<div class="text-gray-600 dark:text-gray-400 text-xs mt-1">
+					<div class="text-muted-foreground text-xs mt-1">
 						Shape: {selectedWire.data?.wireShape || 'straight'} | Style: {selectedWire.data?.wireStyle || 'solid'}
 					</div>
 				{:else if selectedNode}
-					<div class="text-green-600 dark:text-green-400 font-medium">
+					<div class="text-chart-2 font-medium">
 						{selectedNode.type} Selected
 					</div>
-					<div class="text-gray-600 dark:text-gray-400 text-xs mt-1">
+					<div class="text-muted-foreground text-xs mt-1">
 						ID: {selectedNode.id}
 					</div>
 				{:else if isDragOver}
-					<div class="text-orange-600 dark:text-orange-400 font-medium animate-pulse">
+					<div class="text-chart-3 font-medium animate-pulse">
 						Drop component here
 					</div>
 				{:else if isCollaborative}
 					<div class="flex items-center gap-2">
 						<span class="relative flex h-2 w-2">
-							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-							<span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-chart-2 opacity-75"></span>
+							<span class="relative inline-flex rounded-full h-2 w-2 bg-chart-2"></span>
 						</span>
-						<span class="text-gray-600 dark:text-gray-400">
+						<span class="text-muted-foreground">
 							{isReadOnlyMode ? 'Read-only' : 'Collaborative'} mode
 							{#if collaboratorCount > 0}
 								· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
 							{/if}
 							{#if isSaving}
-								<span class="ml-1 text-amber-500">· Saving...</span>
+								<span class="ml-1 text-chart-3">· Saving...</span>
 							{:else if $circuitStore.throttledSave}
-								<span class="ml-1 text-amber-500">· Saving...</span>
+								<span class="ml-1 text-chart-3">· Saving...</span>
 							{:else if $circuitStore.pendingChanges}
-								<span class="ml-1 text-amber-500">· Unsaved changes</span>
+								<span class="ml-1 text-chart-3">· Unsaved changes</span>
 							{/if}
 						</span>
 					</div>
 				{:else}
-					<div class="text-gray-600 dark:text-gray-400">
+					<div class="text-muted-foreground">
 						{currentProjectName}
 						{#if hasUnsavedChanges}
-							<span class="text-amber-500 ml-1">· Unsaved changes</span>
+							<span class="text-chart-3 ml-1">· Unsaved changes</span>
 						{/if}
 					</div>
 				{/if}
@@ -771,11 +770,86 @@
 
 <style>
 	:global(.svelte-flow) {
-		background: white;
+		background: hsl(var(--background)) !important;
 	}
 	
-	:global(.dark .svelte-flow) {
-		background: #111827;
+	:global(.svelte-flow .svelte-flow__node) {
+		background: hsl(var(--card));
+		border-color: hsl(var(--border));
+		color: hsl(var(--card-foreground));
+	}
+	
+	:global(.svelte-flow .svelte-flow__edge) {
+		stroke: hsl(var(--muted-foreground));
+	}
+	
+	:global(.svelte-flow .svelte-flow__edge.selected) {
+		stroke: hsl(var(--primary));
+	}
+	
+	:global(.svelte-flow .svelte-flow__handle) {
+		background: hsl(var(--muted-foreground));
+		border-color: hsl(var(--border));
+	}
+	
+	:global(.svelte-flow .svelte-flow__handle.connectable) {
+		background: hsl(var(--primary));
+	}
+	
+	:global(.svelte-flow .svelte-flow__handle.connecting) {
+		background: hsl(var(--chart-2));
+	}
+	
+	/* MiniMap styling */
+	:global(.svelte-flow .svelte-flow__minimap) {
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+	}
+	
+	:global(.svelte-flow .svelte-flow__minimap-mask) {
+		fill: hsl(var(--muted) / 0.6);
+	}
+	
+	:global(.svelte-flow .svelte-flow__minimap-node) {
+		fill: hsl(var(--muted-foreground));
+		stroke: hsl(var(--border));
+	}
+	
+	/* Controls styling */
+	:global(.svelte-flow .svelte-flow__controls) {
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: var(--radius);
+	}
+	
+	:global(.svelte-flow .svelte-flow__controls-button) {
+		background: hsl(var(--card));
+		border-bottom: 1px solid hsl(var(--border));
+		color: hsl(var(--card-foreground));
+	}
+	
+	:global(.svelte-flow .svelte-flow__controls-button:hover) {
+		background: hsl(var(--accent));
+	}
+	
+	/* Background pattern */
+	:global(.svelte-flow .svelte-flow__background) {
+		background: hsl(var(--background));
+	}
+	
+	:global(.svelte-flow .svelte-flow__background .svelte-flow__background-pattern) {
+		fill: hsl(var(--muted-foreground) / 0.08);
+	}
+	
+	:global(.dark .svelte-flow .svelte-flow__background .svelte-flow__background-pattern) {
+		fill: hsl(var(--muted-foreground) / 0.2);
+	}
+	
+	/* Panel styling */
+	:global(.svelte-flow .svelte-flow__panel) {
+		background: hsl(var(--card));
+		color: hsl(var(--card-foreground));
+		border: 1px solid hsl(var(--border));
 	}
 
 	/* Hide SvelteFlow attribution */
@@ -795,14 +869,14 @@
 	}
 
 	.drag-preview-content {
-		background: #3b82f6;
-		color: white;
+		background: hsl(var(--primary));
+		color: hsl(var(--primary-foreground));
 		padding: 8px 12px;
 		border-radius: 6px;
 		font-size: 12px;
 		font-weight: 600;
-		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-		border: 2px dashed white;
+		box-shadow: 0 4px 12px hsl(var(--primary) / 0.3);
+		border: 2px dashed hsl(var(--primary-foreground));
 		animation: pulse 1s infinite;
 	}
 

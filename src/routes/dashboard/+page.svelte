@@ -102,7 +102,7 @@
 							<div>
 								<h4 class="font-medium mb-1">Gemini API Key</h4>
 								<p class="text-sm text-muted-foreground">
-									{'Enter your Gemini API Key' || 'Not set'}
+									{'Not set'}
 									<!-- Placeholder for Gemini API key input/display -->
 								</p>
 							</div>

@@ -98,49 +98,49 @@
 	<div class="load-project-dialog-backdrop" onclick={handleBackdropClick} role="dialog" aria-modal="true">
 		<div class="load-project-dialog">
 			<div class="p-6">
-				<h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+				<h2 class="text-xl font-semibold text-foreground mb-4">
 					Load Circuit Project
 				</h2>
 				
 				{#if loading}
 					<div class="flex items-center justify-center py-8">
-						<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-						<span class="ml-3 text-gray-600 dark:text-gray-400">Loading projects...</span>
+						<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+						<span class="ml-3 text-muted-foreground">Loading projects...</span>
 					</div>
 				{:else if error}
-					<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-						<p class="text-red-700 dark:text-red-400">{error}</p>
+					<div class="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
+						<p class="text-destructive">{error}</p>
 					</div>
 				{:else if projects.length === 0}
 					<div class="text-center py-8">
-						<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 						</svg>
-						<h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No circuit projects found</h3>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create your first circuit to get started.</p>
+						<h3 class="mt-2 text-sm font-medium text-foreground">No circuit projects found</h3>
+						<p class="mt-1 text-sm text-muted-foreground">Create your first circuit to get started.</p>
 					</div>
 				{:else}
 					<div class="space-y-2 max-h-64 overflow-y-auto">
 						{#each projects as project}
 							<button
 								class="w-full text-left p-3 border rounded-lg transition-colors {selectedProject?.id === project.id 
-									? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-									: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
+									? 'border-primary bg-primary/10' 
+									: 'border-border hover:border-primary/50 hover:bg-accent'}"
 								onclick={() => selectProject(project)}
 							>
 								<div class="flex justify-between items-start">
 									<div class="flex-1">
-										<h3 class="font-medium text-gray-900 dark:text-white">{project.name}</h3>
+										<h3 class="font-medium text-foreground">{project.name}</h3>
 										{#if project.description}
-											<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{project.description}</p>
+											<p class="text-sm text-muted-foreground mt-1">{project.description}</p>
 										{/if}
-										<div class="flex items-center space-x-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+										<div class="flex items-center space-x-4 mt-2 text-xs text-muted-foreground">
 											<span>{project.component_count || 0} components</span>
 											<span>Updated {formatDate(project.updated_at)}</span>
 										</div>
 									</div>
 									{#if selectedProject?.id === project.id}
-										<svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+										<svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
 											<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
 										</svg>
 									{/if}
@@ -178,7 +178,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
+		background: hsl(var(--background) / 0.5);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -186,17 +186,13 @@
 	}
 
 	.load-project-dialog {
-		background: white;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
 		border-radius: 12px;
-		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+		box-shadow: 0 10px 25px hsl(var(--background) / 0.15);
 		min-width: 480px;
 		max-width: 90vw;
 		max-height: 90vh;
 		overflow-y: auto;
-	}
-
-	:global(.dark) .load-project-dialog {
-		background: #1f2937;
-		border: 1px solid #374151;
 	}
 </style>

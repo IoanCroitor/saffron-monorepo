@@ -12,7 +12,7 @@
 	<Handle type="source" position={Position.Right} class="handle-right" />
 	
 	<div class="component-body">
-		<ComponentIcon type="diode" class="w-12 h-6 text-purple-600" />
+		<ComponentIcon type="diode" class="w-12 h-6 text-orange-500" />
 		<div class="component-label">
 			<div class="component-value">{diodeType}</div>
 		</div>
@@ -21,24 +21,28 @@
 
 <style>
 	.diode-node {
-		background: white;
-		border: 2px solid #e5e7eb;
+		background: #f8fafc;
+		border: 2px solid #e2e8f0;
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 	}
 
-	.diode-node:hover {
-		border-color: #8b5cf6;
-		box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
-	}
+
 
 	.diode-node.selected {
-		border-color: #8b5cf6;
-		box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+		border-color: #f97316;
+		box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+	}
+
+	/* Dark mode */
+	:global(.dark) .diode-node {
+		background: #374151;
+		border-color: #4b5563;
 	}
 
 	.component-body {
@@ -59,19 +63,28 @@
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 	}
 
+	:global(.dark) .component-value {
+		color: #d1d5db;
+	}
+
 	:global(.handle-left),
 	:global(.handle-right) {
 		width: 8px;
 		height: 8px;
 		background: #6b7280;
-		border: 2px solid white;
+		border: 2px solid #ffffff;
 		border-radius: 50%;
 	}
 
-	:global(.handle-left:hover),
-	:global(.handle-right:hover) {
-		background: #8b5cf6;
-		transform: scale(1.2);
+	:global(.dark) :global(.handle-left),
+	:global(.dark) :global(.handle-right) {
+		background: #9ca3af;
+		border-color: #1f2937;
+	}
+
+	:global(.dark) .diode-node.selected {
+		border-color: #f97316;
+		box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
 	}
 
 	:global(.handle-left) {
@@ -80,24 +93,5 @@
 
 	:global(.handle-right) {
 		right: -6px;
-	}
-
-	/* Dark mode */
-	:global(.dark) .diode-node {
-		background: #1f2937;
-		border-color: #374151;
-	}
-
-	:global(.dark) .diode-node:hover {
-		border-color: #a78bfa;
-	}
-
-	:global(.dark) .diode-node.selected {
-		border-color: #a78bfa;
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.2);
-	}
-
-	:global(.dark) .component-value {
-		color: #d1d5db;
 	}
 </style>

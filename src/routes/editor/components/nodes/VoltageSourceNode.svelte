@@ -21,19 +21,14 @@
 
 <style>
 	.voltage-source-node {
-		background: white;
-		border: 2px solid #e5e7eb;
+		background: #f8fafc;
+		border: 2px solid #e2e8f0;
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
-	}
-
-	.voltage-source-node:hover {
-		border-color: #f59e0b;
-		box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
 	}
 
 	.voltage-source-node.selected {
@@ -77,19 +72,10 @@
 		left: -6px;
 	}
 
-	:global(.handle-positive:hover),
-	:global(.handle-negative:hover) {
-		transform: scale(1.2);
-	}
-
 	/* Dark mode */
 	:global(.dark) .voltage-source-node {
-		background: #1f2937;
-		border-color: #374151;
-	}
-
-	:global(.dark) .voltage-source-node:hover {
-		border-color: #fbbf24;
+		background: #374151;
+		border-color: #4b5563;
 	}
 
 	:global(.dark) .voltage-source-node.selected {

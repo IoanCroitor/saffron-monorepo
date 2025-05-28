@@ -8,10 +8,10 @@
 	export let selected: boolean = false;
 </script>
 
-<div class="probe-node relative bg-white border-2 border-purple-400 rounded-lg shadow-lg min-w-[60px] min-h-[40px] p-2 {selected ? 'ring-2 ring-blue-500' : ''}">
+<div class="probe-node relative bg-slate-50 dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg min-w-[60px] min-h-[40px] p-2 {selected ? 'ring-2 ring-purple-500 border-purple-400' : ''}">
 	<!-- Probe Symbol -->
 	<div class="relative w-8 h-6 flex items-center justify-center mx-auto">
-		<svg width="32" height="24" viewBox="0 0 32 24" class="text-purple-600">
+		<svg width="32" height="24" viewBox="0 0 32 24" class="text-purple-600 dark:text-purple-400">
 			<circle cx="24" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
 			<line x1="8" y1="12" x2="18" y2="12" stroke="currentColor" stroke-width="2"/>
 			<polygon points="8,8 8,16 12,12" fill="currentColor"/>
@@ -19,7 +19,7 @@
 	</div>
 
 	<!-- Component Label -->
-	<div class="text-xs font-medium text-center text-purple-700 mt-1">
+	<div class="text-xs font-medium text-center text-purple-700 dark:text-purple-300 mt-1">
 		{data.label || 'PROBE'}
 	</div>
 
@@ -34,9 +34,5 @@
 <style>
 	.probe-node {
 		transition: all 0.2s ease;
-	}
-	
-	.probe-node:hover {
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 </style>
