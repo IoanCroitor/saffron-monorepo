@@ -178,21 +178,28 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: hsl(var(--background) / 0.5);
+		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(4px);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 1000;
+		z-index: 9999;
 	}
 
 	.load-project-dialog {
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
+		background: white;
+		border: 1px solid #e5e7eb;
 		border-radius: 12px;
-		box-shadow: 0 10px 25px hsl(var(--background) / 0.15);
+		box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.04);
 		min-width: 480px;
 		max-width: 90vw;
 		max-height: 90vh;
 		overflow-y: auto;
+	}
+
+	:global(.dark) .load-project-dialog {
+		background: #1f2937;
+		border: 1px solid #374151;
+		box-shadow: 0 20px 25px rgba(0, 0, 0, 0.25), 0 10px 10px rgba(0, 0, 0, 0.1);
 	}
 </style>

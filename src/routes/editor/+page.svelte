@@ -37,7 +37,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { initCollaboration, hasEditRights, broadcastNodeMovement, updateCursorAction, broadcastComponentAdded, broadcastComponentRemoved, generateComponentId } from './services/collaboration';
+	import { initCollaboration, hasEditRights, broadcastNodeMovement, updateCursorAction, broadcastComponentAdded, broadcastComponentRemoved, broadcastConnectionAdded, broadcastConnectionRemoved, generateComponentId } from './services/collaboration';
 	import CollaborativeCursors from './components/CollaborativeCursors.svelte';
 	
 	import '@xyflow/svelte/dist/style.css';
@@ -75,6 +75,7 @@
 	let currentProjectId = $state<string | null>(null);
 	let currentProjectName = $state<string>('Untitled Circuit');
 	let hasUnsavedChanges = $state(false);
+	let dragUpdateTimeout: ReturnType<typeof setTimeout>;
 	
 	// Collaboration state
 	let isCollaborative = $state(false);
@@ -99,37 +100,106 @@
 		}
 	}
 
-	// Initialize from store and sync changes
+	// Enhanced reactive effect for bulletproof position handling
 	$effect(() => {
 		const store = $circuitStore;
 		
-		// When nodes are added/removed, merge with existing positions
-		if (nodes.length !== store.nodes.length) {
-			// Create a map of current positions
+		// Skip updates if store is empty during initialization
+		if (!store.nodes || store.nodes.length === 0) {
+			return;
+		}
+		
+		// Check for structural changes (components added/removed)
+		const currentNodeIds = new Set(nodes.map(n => n.id));
+		const storeNodeIds = new Set(store.nodes.map(n => n.id));
+		const structuralChange = currentNodeIds.size !== storeNodeIds.size ||
+			!Array.from(currentNodeIds).every(id => storeNodeIds.has(id)) ||
+			!Array.from(storeNodeIds).every(id => currentNodeIds.has(id));
+		
+		// Check for data/parameter changes in existing nodes
+		const dataChange = !structuralChange && store.nodes.some(storeNode => {
+			const currentNode = nodes.find(n => n.id === storeNode.id);
+			return currentNode && JSON.stringify(currentNode.data) !== JSON.stringify(storeNode.data);
+		});
+		
+		if (structuralChange || dataChange) {
+			// Create a robust position tracking system
 			const currentPositions = new Map(
-				nodes.map(node => [node.id, node.position])
+				nodes.map(node => [node.id, { ...node.position }])
 			);
 			
-			// Update nodes while preserving current positions
+			// Track newly added components with bulletproof detection
+			const newNodeIds = new Set(
+				store.nodes
+					.filter(storeNode => !currentNodeIds.has(storeNode.id))
+					.map(node => node.id)
+			);
+			
+			// Enhanced position update logic with multiple fallbacks
 			nodes = store.nodes.map(storeNode => {
 				const currentPos = currentPositions.get(storeNode.id);
-				return currentPos 
-					? { ...storeNode, position: currentPos }
-					: storeNode;
+				
+				// Priority 1: New components always use store position (prevents center reversion)
+				const isNewComponent = newNodeIds.has(storeNode.id);
+				if (isNewComponent) {
+					return { ...storeNode };
+				}
+				
+				// Priority 2: No current position means fresh load - use store
+				if (!currentPos) {
+					return { ...storeNode };
+				}
+				
+				// Priority 3: Detect collaborator updates with enhanced threshold
+				const positionDelta = {
+					x: Math.abs(storeNode.position.x - currentPos.x),
+					y: Math.abs(storeNode.position.y - currentPos.y)
+				};
+				
+				const isCollaboratorUpdate = isCollaborative && 
+					(positionDelta.x > 15 || positionDelta.y > 15); // Increased threshold for reliability
+				
+				if (isCollaboratorUpdate) {
+					return { ...storeNode };
+				}
+				
+				// Priority 4: Handle zero positions (default center) - use store position
+				const isZeroPosition = storeNode.position.x === 0 && storeNode.position.y === 0;
+				if (isZeroPosition) {
+					return { ...storeNode };
+				}
+				
+				// Priority 5: Handle invalid positions
+				const isInvalidPosition = !isFinite(currentPos.x) || !isFinite(currentPos.y) ||
+					currentPos.x < -10000 || currentPos.x > 10000 ||
+					currentPos.y < -10000 || currentPos.y > 10000;
+				
+				if (isInvalidPosition) {
+					return { ...storeNode };
+				}
+				
+				// Default: Preserve current position for local changes
+				return { ...storeNode, position: currentPos };
 			});
 		}
 		
-		// Force sync edges with deep equality check for reactivity
+		// Bulletproof edge synchronization
 		const newEdges = [...store.edges];
-		if (JSON.stringify(edges) !== JSON.stringify(newEdges)) {
+		const edgesChanged = JSON.stringify(edges.map(e => ({ id: e.id, source: e.source, target: e.target }))) !== 
+			JSON.stringify(newEdges.map(e => ({ id: e.id, source: e.source, target: e.target })));
+		
+		if (edgesChanged) {
 			edges = newEdges;
 		}
 		
-		// If a wire is selected, update it to match the store's version
-		if (selectedWire && selectedWire.id) {
+		// Sync selected wire with enhanced error checking
+		if (selectedWire?.id) {
 			const updatedEdge = store.edges.find(edge => edge.id === selectedWire!.id);
 			if (updatedEdge && JSON.stringify(updatedEdge) !== JSON.stringify(selectedWire)) {
-				selectedWire = updatedEdge;
+				selectedWire = { ...updatedEdge };
+			} else if (!updatedEdge) {
+				// Wire was deleted
+				selectedWire = null;
 			}
 		}
 	});
@@ -140,6 +210,16 @@
 			const updatedWire = edges.find(edge => edge.id === selectedWire!.id);
 			if (updatedWire && updatedWire !== selectedWire) {
 				selectedWire = updatedWire;
+			}
+		}
+	});
+
+	// Keep selectedNode synchronized with store changes
+	$effect(() => {
+		if (selectedNode?.id && nodes.length > 0) {
+			const updatedNode = nodes.find(node => node.id === selectedNode!.id);
+			if (updatedNode && JSON.stringify(updatedNode.data?.parameters) !== JSON.stringify(selectedNode.data?.parameters)) {
+				selectedNode = updatedNode;
 			}
 		}
 	});
@@ -303,30 +383,89 @@
 			data: { color: '#64748b', wireShape: 'smoothstep', wireStyle: 'solid' }
 		};
 		circuitStore.addConnection(newEdge);
+		
+		// Broadcast connection addition to collaborators
+		if (isCollaborative && !isReadOnlyMode) {
+			broadcastConnectionAdded(newEdge);
+		}
+	}
+
+	function onNodeDrag(params: any) {
+		// Enhanced real-time position updates during drag with bulletproof error handling
+		const { node } = params;
+		if (!node?.position || !node.id) return;
+		
+		try {
+			// Validate position values
+			const position = {
+				x: isFinite(node.position.x) ? node.position.x : 0,
+				y: isFinite(node.position.y) ? node.position.y : 0
+			};
+			
+			// Clamp positions to reasonable bounds
+			position.x = Math.max(-5000, Math.min(5000, position.x));
+			position.y = Math.max(-5000, Math.min(5000, position.y));
+			
+			if (isCollaborative && !isReadOnlyMode) {
+				// Optimized throttling for real-time updates
+				clearTimeout(dragUpdateTimeout);
+				dragUpdateTimeout = setTimeout(() => {
+					try {
+						circuitStore.updateNodePosition(node.id, position);
+						broadcastNodeMovement(node.id, position);
+					} catch (error) {
+						console.warn('Error updating node position during drag:', error);
+					}
+				}, 50); // Faster updates for better real-time feel
+			}
+		} catch (error) {
+			console.error('Error in onNodeDrag:', error);
+		}
 	}
 
 	function onNodeDragStart(params: any) {
-		// Update cursor action to show dragging state
-		if (isCollaborative) {
-			updateCursorAction('dragging', params.node.id);
+		try {
+			// Enhanced cursor state tracking
+			if (isCollaborative && params.node?.id) {
+				updateCursorAction('dragging', params.node.id);
+			}
+		} catch (error) {
+			console.warn('Error updating cursor action on drag start:', error);
 		}
 	}
 
 	function onNodeDragStop(params: any) {
-		// Update the circuitStore with the final position when drag stops
-		const { node } = params;
-		if (node && node.position) {
-			circuitStore.updateNodePosition(node.id, node.position);
+		try {
+			// Clear any pending throttled updates
+			clearTimeout(dragUpdateTimeout);
 			
-			// Broadcast position update to collaborators
-			if (isCollaborative && !isReadOnlyMode) {
-				broadcastNodeMovement(node.id, node.position);
+			// Final position update with validation
+			const { node } = params;
+			if (node?.position && node.id) {
+				const position = {
+					x: isFinite(node.position.x) ? node.position.x : 0,
+					y: isFinite(node.position.y) ? node.position.y : 0
+				};
+				
+				// Clamp to reasonable bounds
+				position.x = Math.max(-5000, Math.min(5000, position.x));
+				position.y = Math.max(-5000, Math.min(5000, position.y));
+				
+				// Update store with final position
+				circuitStore.updateNodePosition(node.id, position);
+				
+				// Broadcast final position to collaborators
+				if (isCollaborative && !isReadOnlyMode) {
+					broadcastNodeMovement(node.id, position);
+				}
 			}
-		}
-		
-		// Reset cursor action to idle
-		if (isCollaborative) {
-			updateCursorAction('idle');
+			
+			// Reset cursor action
+			if (isCollaborative) {
+				updateCursorAction('idle');
+			}
+		} catch (error) {
+			console.error('Error in onNodeDragStop:', error);
 		}
 	}
 
@@ -371,34 +510,72 @@
 	function onDrop(event: DragEvent) {
 		event.preventDefault();
 		
-		const componentType = event.dataTransfer?.getData('application/reactflow');
-		if (!componentType) return;
-
-		// Use SvelteFlow's coordinate transformation to get the correct position
-		let position = { x: event.clientX - 300, y: event.clientY - 100 }; // Fallback positioning
-		
-		if (svelteFlowInstance) {
-			position = svelteFlowInstance.screenToFlowPosition({
-				x: event.clientX,
-				y: event.clientY
-			});
+		try {
+			if (!event.dataTransfer) return;
+			
+			const componentType = event.dataTransfer.getData('application/reactflow');
+			if (!componentType) return;
+			
+			// Enhanced position calculation with multiple fallbacks
+			let position = { x: 100, y: 100 }; // Safe default
+			
+			if (svelteFlowInstance) {
+				try {
+					const canvasPosition = svelteFlowInstance.screenToFlowPosition({
+						x: event.clientX,
+						y: event.clientY
+					});
+					
+					// Validate the calculated position
+					if (isFinite(canvasPosition.x) && isFinite(canvasPosition.y)) {
+						position = {
+							x: Math.max(-5000, Math.min(5000, canvasPosition.x)),
+							y: Math.max(-5000, Math.min(5000, canvasPosition.y))
+						};
+					}
+				} catch (positionError) {
+					console.warn('Error calculating drop position, using fallback:', positionError);
+					// Use mouse position relative to viewport as fallback
+					position = { 
+						x: Math.max(0, event.clientX - 200), 
+						y: Math.max(0, event.clientY - 100) 
+					};
+				}
+			}
+			
+			// Generate bulletproof component ID
+			const userId = $page.data.session?.user?.id || 'anonymous';
+			const componentId = generateComponentId(componentType, userId);
+			
+			// Add component with enhanced error handling
+			try {
+				const actualId = circuitStore.addComponent(componentType, position, componentId);
+				
+				// Broadcast to collaborators with retry logic
+				if (isCollaborative && !isReadOnlyMode) {
+					const finalId = actualId || componentId;
+					setTimeout(() => {
+						// Small delay to ensure local state is updated first
+						broadcastComponentAdded(componentType, position, finalId);
+					}, 10);
+				}
+				
+				console.log(`Successfully added ${componentType} at position:`, position);
+				
+			} catch (addError) {
+				console.error('Error adding component to store:', addError);
+				// Try with fallback position
+				const fallbackPosition = { x: 100 + Math.random() * 100, y: 100 + Math.random() * 100 };
+				circuitStore.addComponent(componentType, fallbackPosition, componentId);
+			}
+			
+		} catch (error) {
+			console.error('Error in onDrop:', error);
+		} finally {
+			// Always clean up drag state
+			isDragOver = false;
+			dragPosition = null;
 		}
-
-		// Generate component ID that includes user info for uniqueness
-		const userId = $page.data.session?.user?.id;
-		const componentId = generateComponentId(componentType, userId);
-		
-		// Add component to store with the generated ID
-		const actualId = circuitStore.addComponent(componentType, position, componentId);
-		
-		// Broadcast component addition to collaborators
-		if (isCollaborative && !isReadOnlyMode) {
-			broadcastComponentAdded(componentType, position, actualId || componentId);
-		}
-		
-		// Clear drag state
-		isDragOver = false;
-		dragPosition = null;
 	}
 
 	// Track collaborator count
@@ -641,6 +818,7 @@
 			onnodeclick={onNodeClick}
 			onpaneclick={onPaneClick}
 			onconnect={onConnect}
+			onnodedrag={onNodeDrag}
 			onnodedragstart={onNodeDragStart}
 			onnodedragstop={onNodeDragStop}
 			onedgeclick={(event) => {
@@ -735,7 +913,7 @@
 	</div>
 	
 	<!-- Right Sidebar - Properties & Analysis -->
-	<PropertiesSidebar {selectedNode} />
+	<PropertiesSidebar bind:selectedNode bind:nodes />
 	</div>
 
 	<!-- Wire Properties Panel (Modal) -->

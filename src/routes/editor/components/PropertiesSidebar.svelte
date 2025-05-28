@@ -19,6 +19,7 @@
 
     interface Props {
         selectedNode: Node | null;
+        nodes: Node[];
     }
 
     interface FieldDefinition {
@@ -36,7 +37,7 @@
         condition?: (params: Record<string, any>) => boolean;
     }
 
-    let { selectedNode }: Props = $props();
+    let { selectedNode = $bindable(), nodes = $bindable() }: Props = $props();
 
     let parameters = $state<Record<string, any>>({});
 
@@ -48,10 +49,46 @@
         }
     });
 
+    // Keep selectedNode synchronized with nodes array changes from store
+    $effect(() => {
+        if (selectedNode?.id && nodes.length > 0) {
+            const updatedNode = nodes.find(node => node.id === selectedNode!.id);
+            if (updatedNode && JSON.stringify(updatedNode.data?.parameters) !== JSON.stringify(selectedNode.data?.parameters)) {
+                selectedNode = updatedNode;
+            }
+        }
+    });
+
     function updateParameter(key: string, value: string | number | boolean) {
+        // Update local parameters immediately for instant UI feedback
         parameters[key] = value;
+        
         if (selectedNode) {
+            // Update the store
             circuitStore.updateComponent(selectedNode.id, parameters);
+            
+            // Force immediate update of nodes array for instant visual feedback
+            const nodeIndex = nodes.findIndex(node => node.id === selectedNode!.id);
+            if (nodeIndex !== -1) {
+                nodes[nodeIndex] = {
+                    ...nodes[nodeIndex],
+                    data: {
+                        ...nodes[nodeIndex].data,
+                        parameters: { ...parameters }
+                    }
+                };
+                // Trigger reactivity by creating new array
+                nodes = [...nodes];
+            }
+            
+            // Force immediate update of selectedNode for instant UI feedback
+            selectedNode = {
+                ...selectedNode,
+                data: {
+                    ...selectedNode.data,
+                    parameters: { ...parameters }
+                }
+            };
         }
     }
 
@@ -75,7 +112,32 @@
         if (selectedNode) {
             const defaultParams = getDefaultParameters(selectedNode.type!);
             parameters = { ...defaultParams };
+            
+            // Update the store
             circuitStore.updateComponent(selectedNode.id, parameters);
+            
+            // Force immediate update of nodes array for instant visual feedback
+            const nodeIndex = nodes.findIndex(node => node.id === selectedNode!.id);
+            if (nodeIndex !== -1) {
+                nodes[nodeIndex] = {
+                    ...nodes[nodeIndex],
+                    data: {
+                        ...nodes[nodeIndex].data,
+                        parameters: { ...parameters }
+                    }
+                };
+                // Trigger reactivity by creating new array
+                nodes = [...nodes];
+            }
+            
+            // Force immediate update of selectedNode for instant visual feedback
+            selectedNode = {
+                ...selectedNode,
+                data: {
+                    ...selectedNode.data,
+                    parameters: { ...parameters }
+                }
+            };
         }
     }
 

@@ -1,6 +1,6 @@
-<!-- Simple SPICE Editor Component -->
+<!-- SPICE Editor with Custom Syntax Highlighting -->
 <script lang="ts">
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount, createEventDispatcher, tick } from 'svelte';
 	import { browser } from '$app/environment';
 
 	export let value = '';
@@ -11,106 +11,109 @@
 	let isEditorFullscreen = false;
 	let editorWrapper: HTMLDivElement;
 
-	let editorContainer: HTMLDivElement;
 	let textareaElement: HTMLTextAreaElement;
-	let editor: any = null;
-	let monacoLoaded = false;
-	let monacoError = false;
+	let highlightContainer: HTMLDivElement;
+	let highlightedCode = '';
+	let highlightingEnabled = false;
 
 	onMount(async () => {
 		if (!browser) return;
-
-		try {
-			// Try to load Monaco Editor with simplified approach
-			const monaco = await import('monaco-editor');
-			
-			// Register SPICE language if not already registered
-			if (!monaco.languages.getLanguages().find(lang => lang.id === 'spice')) {
-				monaco.languages.register({ id: 'spice' });
-				
-				// Simple SPICE syntax highlighting
-				monaco.languages.setMonarchTokensProvider('spice', {
-					tokenizer: {
-						root: [
-							[/\*.*$/, 'comment'],
-							[/^\..*$/, 'keyword'],
-							[/[RLCVIMQDJKrclvimqdjk]\w*/, 'type'],
-							[/\d+\.?\d*[munpfkMGT]?/, 'number'],
-							[/\w+/, 'identifier'],
-						],
-					},
-				});
-
-				// Simple themes
-				monaco.editor.defineTheme('spice-dark', {
-					base: 'vs-dark',
-					inherit: true,
-					rules: [
-						{ token: 'comment', foreground: '6A9955' },
-						{ token: 'keyword', foreground: '569CD6' },
-						{ token: 'type', foreground: '4EC9B0' },
-						{ token: 'number', foreground: 'B5CEA8' },
-					],
-					colors: {}
-				});
-
-				monaco.editor.defineTheme('spice-light', {
-					base: 'vs',
-					inherit: true,
-					rules: [
-						{ token: 'comment', foreground: '008000' },
-						{ token: 'keyword', foreground: '0000FF' },
-						{ token: 'type', foreground: '0070C1' },
-						{ token: 'number', foreground: '098658' },
-					],
-					colors: {}
-				});
-			}
-
-			// Create the editor
-			editor = monaco.editor.create(editorContainer, {
-				value: value,
-				language: 'spice',
-				theme: theme === 'dark' ? 'spice-dark' : 'spice-light',
-				minimap: { enabled: false },
-				fontSize: 14,
-				lineNumbers: 'on',
-				automaticLayout: true,
-				wordWrap: 'on',
-			});
-
-			// Listen for changes
-			editor.onDidChangeModelContent(() => {
-				const newValue = editor.getValue();
-				value = newValue;
-				dispatch('change', newValue);
-			});
-
-			monacoLoaded = true;
-
-		} catch (error) {
-			console.warn('Failed to load Monaco Editor:', error);
-			monacoError = true;
-		}
+		highlightingEnabled = true;
+		await updateHighlighting();
 	});
 
-	// Update theme when prop changes
-	$: if (editor && monacoLoaded) {
-		import('monaco-editor').then(monaco => {
-			monaco.editor.setTheme(theme === 'dark' ? 'spice-dark' : 'spice-light');
-		}).catch(() => {});
+	// Update highlighting when value or theme changes
+	$: if (highlightingEnabled && value !== undefined) {
+		updateHighlighting();
 	}
 
-	// Update editor value when prop changes
-	$: if (editor && monacoLoaded && editor.getValue() !== value) {
-		editor.setValue(value);
+	async function updateHighlighting() {
+		if (!browser || !highlightingEnabled) return;
+
+		try {
+			// Create clean SPICE syntax highlighting
+			const lines = (value || '').split('\n');
+			const highlightedLines = lines.map(line => {
+				let highlightedLine = line;
+				
+				// Escape HTML first
+				highlightedLine = highlightedLine
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;');
+				
+				// Apply SPICE-specific highlighting
+				if (line.trim().startsWith('*')) {
+					// Comments (lines starting with *)
+					highlightedLine = `<span class="spice-comment">${highlightedLine}</span>`;
+				} else if (line.trim().match(/^\.[a-zA-Z]+/)) {
+					// Control statements (lines starting with .)
+					highlightedLine = highlightedLine.replace(
+						/(^\s*)(\.[a-zA-Z]+.*$)/,
+						'$1<span class="spice-directive">$2</span>'
+					);
+				} else {
+					// Components (R, L, C, V, I, M, Q, D, J, K)
+					highlightedLine = highlightedLine.replace(
+						/\b([RLCVIMQDJKrclvimqdjk]\w*)\b/g,
+						'<span class="spice-component">$1</span>'
+					);
+					
+					// Numbers with units
+					highlightedLine = highlightedLine.replace(
+						/\b(\d+\.?\d*[munpfkMGT]?)\b/g,
+						'<span class="spice-number">$1</span>'
+					);
+					
+					// Node names (common patterns)
+					highlightedLine = highlightedLine.replace(
+						/\b(VDD|VSS|GND|VCC|0)\b/g,
+						'<span class="spice-node">$1</span>'
+					);
+				}
+				
+				return highlightedLine;
+			});
+			
+			highlightedCode = highlightedLines.join('\n');
+			
+		} catch (error) {
+			console.warn('Highlighting error:', error);
+			highlightedCode = value || '';
+		}
 	}
 
 	function handleTextareaChange(event: Event) {
 		const target = event.target as HTMLTextAreaElement;
 		value = target.value;
 		dispatch('change', value);
+		// Update syntax highlighting on change
+		if (highlightingEnabled) {
+			updateHighlighting();
+		}
 	}
+
+	function handleTextareaInput(event: Event) {
+		const target = event.target as HTMLTextAreaElement;
+		value = target.value;
+		dispatch('change', value);
+		// Debounce highlighting for performance
+		clearTimeout(highlightTimeout);
+		highlightTimeout = setTimeout(() => {
+			if (highlightingEnabled) {
+				updateHighlighting();
+			}
+		}, 300);
+	}
+
+	function handleTextareaScroll() {
+		if (textareaElement && highlightContainer) {
+			highlightContainer.scrollTop = textareaElement.scrollTop;
+			highlightContainer.scrollLeft = textareaElement.scrollLeft;
+		}
+	}
+
+	let highlightTimeout: NodeJS.Timeout;
 
 	function toggleEditorFullscreen() {
 		if (!isEditorFullscreen) {
@@ -146,26 +149,22 @@
 			{/if}
 		</button>
 	</div>
-	{#if monacoLoaded}
-		<div bind:this={editorContainer} class="editor-container"></div>
-	{:else if monacoError}
-		<!-- Fallback textarea when Monaco fails -->
-		<div class="textarea-editor" data-theme={theme}>
-			<textarea
-				bind:this={textareaElement}
-				bind:value
-				on:input={handleTextareaChange}
-				placeholder="Enter your SPICE netlist here..."
-				class="spice-textarea"
-				spellcheck="false"
-			></textarea>
+	<div class="editor-content">
+		<div class="highlight-overlay" bind:this={highlightContainer}>
+			<pre><code>{@html highlightedCode}</code></pre>
 		</div>
-	{:else}
-		<!-- Loading state -->
-		<div class="loading-container">
-			<div class="loading-text">Loading editor...</div>
-		</div>
-	{/if}
+		<textarea
+			bind:this={textareaElement}
+			bind:value
+			on:input={handleTextareaInput}
+			on:change={handleTextareaChange}
+			on:scroll={handleTextareaScroll}
+			placeholder="Enter your SPICE netlist here..."
+			class="spice-textarea"
+			data-theme={theme}
+			spellcheck="false"
+		></textarea>
+	</div>
 </div>
 
 <svelte:window on:fullscreenchange={handleEditorFullscreenChange} />
@@ -178,9 +177,10 @@
 		display: flex;
 		flex-direction: column;
 		position: relative;
-		border: 1px solid #404040;
-		border-radius: 4px;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
 		overflow: hidden;
+		background: var(--bg-primary);
 	}
 
 	.editor-wrapper.fullscreen {
@@ -190,123 +190,172 @@
 		width: 100vw !important;
 		height: 100vh !important;
 		z-index: 9999;
-		background: var(--bg-primary, #1e1e1e);
+		background: var(--bg-primary);
 		border-radius: 0;
+		border: none;
 	}
 
 	.editor-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 0.5rem 1rem;
-		background: var(--bg-secondary, #2d2d2d);
-		border-bottom: 1px solid var(--border-color, #404040);
-		color: var(--text-primary, #d4d4d4);
+		padding: 0.75rem 1rem;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border-color);
+		color: var(--text-primary);
 		font-size: 0.875rem;
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.editor-title {
 		user-select: none;
+		color: var(--text-secondary);
+		font-weight: 500;
 	}
 
 	.editor-fullscreen-btn {
-		padding: 0.25rem 0.5rem;
-		background: transparent;
-		color: var(--text-secondary, #b5b5b5);
-		border: 1px solid var(--border-color, #404040);
-		border-radius: 4px;
-		font-size: 1rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 32px;
-		height: 32px;
+		height: 2rem;
+		width: 2rem;
+		padding: 0;
+		background: transparent;
+		border: none;
+		color: var(--text-secondary);
+		cursor: pointer;
+		border-radius: 4px;
+		transition: all 0.2s;
+		font-size: 1rem;
 	}
 
 	.editor-fullscreen-btn:hover {
-		background: var(--bg-tertiary, #3d3d3d);
-		color: var(--text-primary, #d4d4d4);
-		border-color: var(--accent-color, #4f9eff);
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
 	}
 
-	.editor-container {
-		width: 100%;
-		height: 100%;
-		min-height: 400px;
-		flex: 1;
-	}
-
-	.editor-wrapper.fullscreen .editor-container {
-		min-height: calc(100vh - 60px);
-	}
-
-	.textarea-editor {
-		width: 100%;
-		height: 100%;
-		min-height: 400px;
+	.editor-content {
 		position: relative;
 		flex: 1;
+		overflow: hidden;
 	}
 
-	.editor-wrapper.fullscreen .textarea-editor {
-		min-height: calc(100vh - 60px);
+	.highlight-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		overflow: hidden;
+		z-index: 1;
+		background: var(--bg-primary);
+	}
+
+	.highlight-overlay pre {
+		margin: 0;
+		padding: 1rem;
+		background: transparent !important;
+		font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+		font-size: 0.875rem;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		height: 100%;
+		color: var(--text-primary);
+		tab-size: 2;
+	}
+
+	.highlight-overlay code {
+		background: transparent !important;
+		font-family: inherit;
+		font-size: inherit;
+		line-height: inherit;
+		display: block;
+		white-space: pre-wrap;
+		word-wrap: break-word;
 	}
 
 	.spice-textarea {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		min-height: 400px;
 		padding: 1rem;
 		border: none;
 		border-radius: 0;
-		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-		font-size: 14px;
+		font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+		font-size: 0.875rem;
 		line-height: 1.5;
-		resize: vertical;
+		resize: none;
 		outline: none;
-		transition: border-color 0.2s;
+		background: transparent;
+		color: transparent;
+		caret-color: var(--text-primary);
+		z-index: 2;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		tab-size: 2;
 	}
 
-	.textarea-editor[data-theme="dark"] .spice-textarea {
-		background: #1e1e1e;
-		color: #d4d4d4;
-		border-color: #404040;
-	}
-
-	.textarea-editor[data-theme="light"] .spice-textarea {
-		background: #ffffff;
-		color: #000000;
-	}
-
-	.spice-textarea:focus {
-		box-shadow: none;
-	}
-
-	.loading-container {
-		width: 100%;
-		height: 100%;
-		min-height: 400px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: #f5f5f5;
-		border-radius: 0;
-		flex: 1;
-	}
-
-	.editor-wrapper.fullscreen .loading-container {
+	.editor-wrapper.fullscreen .spice-textarea {
 		min-height: calc(100vh - 60px);
 	}
 
-	.loading-text {
-		color: #666;
-		font-size: 14px;
+	.spice-textarea::selection {
+		background: rgba(59, 130, 246, 0.3);
 	}
 
-	:global(.monaco-editor) {
-		border-radius: 4px;
+	.spice-textarea::-moz-selection {
+		background: rgba(59, 130, 246, 0.3);
+	}
+
+	.spice-textarea::placeholder {
+		color: var(--text-secondary);
+	}
+
+	/* SPICE Syntax Highlighting Styles */
+	.highlight-overlay :global(.spice-comment) {
+		color: #6b7280; /* Gray for comments */
+		font-style: italic;
+		opacity: 0.8;
+	}
+
+	.highlight-overlay :global(.spice-directive) {
+		color: #3b82f6; /* Blue for directives */
+		font-weight: 600;
+	}
+
+	.highlight-overlay :global(.spice-component) {
+		color: #10b981; /* Green for components */
+		font-weight: 500;
+	}
+
+	.highlight-overlay :global(.spice-number) {
+		color: #f59e0b; /* Orange for numbers */
+		font-weight: 500;
+	}
+
+	.highlight-overlay :global(.spice-node) {
+		color: #8b5cf6; /* Purple for nodes */
+		font-weight: 600;
+	}
+
+	/* Additional responsive styles */
+	@media (max-width: 768px) {
+		.editor-header {
+			padding: 0.5rem 0.75rem;
+			font-size: 0.8125rem;
+		}
+
+		.editor-title {
+			font-size: 0.8125rem;
+		}
+
+		.highlight-overlay pre,
+		.spice-textarea {
+			font-size: 0.8125rem;
+			padding: 0.75rem;
+		}
 	}
 </style>

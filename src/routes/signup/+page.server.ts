@@ -52,19 +52,8 @@ export const actions: Actions = {
 		}
 
 		if (data.user) {
-			// Create profile in profiles table
-			const { error: profileError } = await supabase
-				.from('profiles')
-				.insert({
-					id: data.user.id,
-					email: data.user.email || '',
-					name: name
-				});
-
-			if (profileError) {
-				console.error('Profile creation error:', profileError);
-			}
-
+			// Profile will be created automatically by database trigger
+			
 			// If email confirmation is enabled, redirect to a confirmation page
 			if (!data.session) {
 				return {

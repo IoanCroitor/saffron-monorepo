@@ -224,7 +224,6 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	let simArray: SimArray;
 	let isInitialized = false;
 	let plotType: 'webgl' | 'd3' = 'd3'; // Default to D3 for better compatibility
-	let isFullscreen = false;
 
 	onMount(async () => {
 		if (browser) {
@@ -319,21 +318,6 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			exampleSelectorOpen = false;
 		}
 	}
-
-	function toggleFullscreen() {
-		if (!document.fullscreenElement) {
-			document.documentElement.requestFullscreen();
-			isFullscreen = true;
-		} else {
-			document.exitFullscreen();
-			isFullscreen = false;
-		}
-	}
-
-	// Listen for fullscreen changes
-	function handleFullscreenChange() {
-		isFullscreen = !!document.fullscreenElement;
-	}
 </script>
 
 <svelte:head>
@@ -360,18 +344,6 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 					disabled={isRunning}
 				/>
 			</div>
-			
-			<button 
-				class="fullscreen-btn"
-				on:click={toggleFullscreen}
-				title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-			>
-				{#if isFullscreen}
-					⚏
-				{:else}
-					⛶
-				{/if}
-			</button>
 			
 			<button 
 				class="run-btn"
@@ -508,7 +480,7 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 </div>
 
 <!-- Click outside handler -->
-<svelte:window on:click={handleClickOutside} on:fullscreenchange={handleFullscreenChange} />
+<svelte:window on:click={handleClickOutside} />
 
 <style>
 	.spice-simulator {
@@ -612,27 +584,6 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	.run-btn:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-	}
-
-	.fullscreen-btn {
-		padding: 0.75rem;
-		background: var(--bg-secondary);
-		color: var(--text-primary);
-		border: 1px solid var(--border-color);
-		border-radius: 6px;
-		font-size: 1.2rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 44px;
-		height: 44px;
-	}
-
-	.fullscreen-btn:hover {
-		background: var(--bg-tertiary);
-		border-color: var(--accent-color);
 	}
 
 	.spinner {

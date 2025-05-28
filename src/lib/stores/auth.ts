@@ -75,19 +75,8 @@ export async function signup(email: string, password: string, name: string): Pro
 		}
 
 		if (data.user) {
-			// Create profile in profiles table
-			const { error: profileError } = await supabase
-				.from('profiles')
-				.insert({
-					id: data.user.id,
-					email: data.user.email || '',
-					name: name
-				});
-
-			if (profileError) {
-				console.error('Profile creation error:', profileError);
-			}
-
+			// Profile will be created automatically by database trigger
+			
 			// If user is confirmed immediately (email confirmation disabled)
 			if (data.session) {
 				const user: User = {

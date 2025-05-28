@@ -192,14 +192,24 @@ function createCircuitStore() {
 			});
 		},
 		updateNodePosition: (nodeId: string, position: { x: number; y: number }) => {
-			update(store => ({
-				...store,
-				nodes: store.nodes.map(node =>
-					node.id === nodeId
-						? { ...node, position }
-						: node
-				)
-			}));
+			update(store => {
+				const updatedStore = {
+					...store,
+					nodes: store.nodes.map(node =>
+						node.id === nodeId
+							? { ...node, position }
+							: node
+					),
+					pendingChanges: true
+				};
+				
+				// Trigger save if collaborative
+				if (store.isCollaborative) {
+					debouncedSave(updatedStore);
+				}
+				
+				return updatedStore;
+			});
 		},
 		removeComponent: (id: string) => {
 			update(store => ({
@@ -880,6 +890,13 @@ function createCircuitStore() {
 			update(store => ({
 				...store,
 				edges: [...store.edges, edge]
+			}));
+		},
+		removeConnectionFromCollaborator: (edgeId: string) => {
+			// Remove connection without triggering save (since this is from a collaborator)
+			update(store => ({
+				...store,
+				edges: store.edges.filter(edge => edge.id !== edgeId)
 			}));
 		}
 	};
