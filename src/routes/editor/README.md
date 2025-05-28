@@ -116,7 +116,7 @@ The simulator is built with:
 
 ### File Structure
 ```
-routes/circuit-sim/
+routes/editor/
 ├── +page.svelte              # Main simulator page
 ├── components/
 │   ├── ComponentsSidebar.svelte    # Left component panel

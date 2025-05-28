@@ -5,17 +5,14 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { ArrowLeft, Plus } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { enhance } from '$app/forms';
+	import type { PageData, ActionData } from './$types';
 	
-	let projectName = '';
-	let projectDescription = '';
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+	
+	let isSubmitting = $state(false);
 	
 	function handleBack() {
-		goto('/projects');
-	}
-	
-	function handleSubmit() {
-		// Mock project creation
-		console.log('Creating project:', { projectName, projectDescription });
 		goto('/projects');
 	}
 </script>
@@ -49,33 +46,60 @@
 						Provide basic information about your new project.
 					</Card.Description>
 				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="space-y-2">
-						<Label for="project-name">Project Name</Label>
-						<Input
-							id="project-name"
-							placeholder="Enter project name..."
-							bind:value={projectName}
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="project-description">Description</Label>
-						<Input
-							id="project-description"
-							placeholder="Brief description of your project..."
-							bind:value={projectDescription}
-						/>
-					</div>
-				</Card.Content>
-				<Card.Footer class="flex gap-3">
-					<Button variant="outline" onclick={handleBack}>
-						Cancel
-					</Button>
-					<Button onclick={handleSubmit} disabled={!projectName.trim()}>
-						<Plus class="w-4 h-4 mr-2" />
-						Create Project
-					</Button>
-				</Card.Footer>
+				<form method="POST" action="?/create" use:enhance={() => {
+					isSubmitting = true;
+					return async ({ result }) => {
+						isSubmitting = false;
+						if (result.type === 'redirect') {
+							goto(result.location);
+						}
+					};
+				}}>
+					<Card.Content class="space-y-4">
+						{#if form?.error}
+							<div class="text-sm text-destructive">
+								{form.error}
+							</div>
+						{/if}
+						
+						<div class="space-y-2">
+							<Label for="name">Project Name</Label>
+							<Input
+								id="name"
+								name="name"
+								placeholder="Enter project name..."
+								value={form?.values?.name ?? ''}
+								class={form?.errors?.name ? 'border-destructive' : ''}
+							/>
+							{#if form?.errors?.name}
+								<p class="text-sm text-destructive">{form.errors.name[0]}</p>
+							{/if}
+						</div>
+						
+						<div class="space-y-2">
+							<Label for="description">Description</Label>
+							<Input
+								id="description"
+								name="description"
+								placeholder="Brief description of your project..."
+								value={form?.values?.description ?? ''}
+								class={form?.errors?.description ? 'border-destructive' : ''}
+							/>
+							{#if form?.errors?.description}
+								<p class="text-sm text-destructive">{form.errors.description[0]}</p>
+							{/if}
+						</div>
+					</Card.Content>
+					<Card.Footer class="flex gap-3 pt-4">
+						<Button type="button" variant="outline" onclick={handleBack}>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={isSubmitting}>
+							<Plus class="w-4 h-4 mr-2" />
+							{isSubmitting ? 'Creating...' : 'Create Project'}
+						</Button>
+					</Card.Footer>
+				</form>
 			</Card.Root>
 			
 			<!-- Template Options -->

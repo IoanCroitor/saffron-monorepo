@@ -12,7 +12,7 @@
     import { Slider } from '$lib/components/ui/slider';
     import { Separator } from '$lib/components/ui/separator';
     import { Badge } from '$lib/components/ui/badge';
-    import { BarChart3, Zap, Activity, Settings, Trash2, Copy, RotateCcw, ChevronDown } from '@lucide/svelte';
+    import { Zap, Settings, Trash2, Copy, RotateCcw, ChevronDown } from '@lucide/svelte';
     import type { Node } from '@xyflow/svelte';
     import { circuitStore } from '../stores/circuit-store';
 	import { Switch } from '$lib/components/ui/switch';
@@ -77,6 +77,16 @@
             parameters = { ...defaultParams };
             circuitStore.updateComponent(selectedNode.id, parameters);
         }
+    }
+
+    function copyNetlist() {
+        const netlist = circuitStore.exportNetlist();
+        navigator.clipboard.writeText(netlist).then(() => {
+            // You could add a toast notification here if you have one set up
+            console.log('Netlist copied to clipboard');
+        }).catch(err => {
+            console.error('Failed to copy netlist:', err);
+        });
     }
 
     function exportNetlist() {
@@ -538,7 +548,7 @@
     }
 </script>
 
-<div class="w-80 h-full overflow-y-scroll bg-background border-l border-border flex flex-col">
+<div class="w-80 h-full overflow-hidden bg-background border-l border-border flex flex-col">
     <!-- Properties Panel -->
     <div class="flex-1 flex flex-col">
         <div class="p-4 border-b border-border">
@@ -714,45 +724,15 @@
         </div>
     </div>
 
-    <!-- Analysis Panel -->
+    <!-- Export Panel -->
     <div class="border-t border-border">
         <div class="p-4">
-            <h2 class="text-lg font-semibold text-foreground mb-4">Analysis</h2>
+            <h2 class="text-lg font-semibold text-foreground mb-4">Export</h2>
             
-            <Card class="p-4 mb-4">
-                <CardHeader class="p-0 pb-2">
-                    <div class="flex items-center gap-2">
-                        <BarChart3 class="w-4 h-4" />
-                        <h3 class="text-sm font-medium">Frequency Response</h3>
-                    </div>
-                </CardHeader>
-                <CardContent class="p-0">
-                    <div class="h-24 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
-                        Bode Plot Preview
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card class="p-4">
-                <CardHeader class="p-0 pb-2">
-                    <div class="flex items-center gap-2">
-                        <Activity class="w-4 h-4" />
-                        <h3 class="text-sm font-medium">Time Domain</h3>
-                    </div>
-                </CardHeader>
-                <CardContent class="p-0">
-                    <div class="h-24 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
-                        Transient Analysis
-                    </div>
-                </CardContent>
-            </Card>
-
-            <div class="mt-4 space-y-2">
-                <Button size="sm" class="w-full" variant="outline">
-                    Run DC Analysis
-                </Button>
-                <Button size="sm" class="w-full" variant="outline">
-                    Run AC Analysis
+            <div class="space-y-2">
+                <Button size="sm" class="w-full" variant="outline" onclick={copyNetlist}>
+                    <Copy class="w-3 h-3 mr-1" />
+                    Copy Netlist
                 </Button>
                 <Button size="sm" class="w-full" variant="outline" onclick={exportNetlist}>
                     Export Netlist

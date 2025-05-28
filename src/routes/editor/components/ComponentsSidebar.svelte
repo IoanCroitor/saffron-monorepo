@@ -97,20 +97,10 @@
 		circuitStore.addComponent(componentType, { x: 400, y: 300 });
 	}
 
-	function loadDemoCircuit() {
-		circuitStore.clear();
-		// Create a demo amplifier circuit
-		circuitStore.addComponent('voltageSource', { x: 100, y: 200 });
-		circuitStore.addComponent('resistor', { x: 250, y: 150 });
-		circuitStore.addComponent('capacitor', { x: 250, y: 250 });
-		circuitStore.addComponent('opamp', { x: 400, y: 200 });
-		circuitStore.addComponent('resistor', { x: 550, y: 150 });
-		circuitStore.addComponent('ground', { x: 100, y: 300 });
-		circuitStore.addComponent('voltmeter', { x: 650, y: 200 });
-	}
+
 </script>
 
-<div class="w-80 h-full bg-background border-r border-border flex flex-col">
+<div class="w-80 h-full overflow-hidden bg-background border-r border-border flex flex-col">
 	<!-- Header -->
 	<div class="p-4 border-b border-border">
 		<h2 class="text-lg font-semibold text-foreground mb-3">Components</h2>
@@ -170,9 +160,6 @@
 	<div class="p-4 border-t border-border space-y-2">
 		<Button variant="outline" size="sm" class="w-full" onclick={() => circuitStore.clear()}>
 			Clear Circuit
-		</Button>
-		<Button variant="default" size="sm" class="w-full" onclick={loadDemoCircuit}>
-			Load Demo Circuit
 		</Button>
 	</div>
 </div>

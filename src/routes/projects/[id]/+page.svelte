@@ -1,51 +1,46 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { ArrowLeft, Edit, Share, Download, Trash2 } from '@lucide/svelte';
+	import { ArrowLeft, Edit, Share, Download, Trash2, CircuitBoard, Zap, Calendar, Clock, BarChart3 } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { enhance } from '$app/forms';
+	import type { PageData } from './$types';
 	
-	$: projectId = $page.params.id;
+	let { data }: { data: PageData } = $props();
 	
-	// Mock project data
-	const project = {
-		id: projectId,
-		name: 'Audio Amplifier Circuit',
-		description: 'Class-A audio amplifier with discrete components',
-		created: 'May 20, 2025',
-		lastModified: '2 hours ago',
-		components: 12,
-		status: 'active',
-		schematic: '/api/schematics/amplifier.svg' // Mock path
-	};
+	let isDeleting = $state(false);
 	
 	function handleBack() {
 		goto('/projects');
 	}
 	
 	function handleEdit() {
-		// Would open the circuit editor
-		console.log('Edit project:', projectId);
+		goto(`/editor?project=${data.project.id}`);
 	}
 	
 	function handleShare() {
-		console.log('Share project:', projectId);
+		// TODO: Implement sharing functionality
+		console.log('Share project:', data.project.id);
 	}
 	
 	function handleDownload() {
-		console.log('Download project:', projectId);
+		// TODO: Implement download functionality (netlist, JSON, etc.)
+		console.log('Download project:', data.project.id);
 	}
 	
-	function handleDelete() {
-		if (confirm('Are you sure you want to delete this project?')) {
-			console.log('Delete project:', projectId);
-			goto('/projects');
+	function getStatusColor(status: string) {
+		switch (status) {
+			case 'active': return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20';
+			case 'completed': return 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20';
+			case 'draft': return 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/20';
+			case 'archived': return 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/20';
+			default: return 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/20';
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>{project.name} | Saffron</title>
+	<title>{data.project.name} | Saffron</title>
 </svelte:head>
 
 <div class="container mx-auto py-8 px-4">
@@ -62,14 +57,14 @@
 			<!-- Project Header -->
 			<div class="flex items-start justify-between">
 				<div>
-					<h1 class="text-3xl font-bold tracking-tight">{project.name}</h1>
-					<p class="text-muted-foreground mt-2">{project.description}</p>
+					<h1 class="text-3xl font-bold tracking-tight">{data.project.name}</h1>
+					<p class="text-muted-foreground mt-2">{data.project.description}</p>
 					<div class="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-						<span>Created: {project.created}</span>
+						<span>Created: {data.project.created}</span>
 						<span>•</span>
-						<span>Last modified: {project.lastModified}</span>
+						<span>Last modified: {data.project.lastModified}</span>
 						<span>•</span>
-						<span>{project.components} components</span>
+						<span>{data.project.components} components</span>
 					</div>
 				</div>
 				<div class="flex items-center gap-2">
@@ -102,11 +97,17 @@
 						<div class="aspect-video bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25">
 							<div class="text-center">
 								<div class="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-									<Edit class="w-8 h-8 text-primary" />
+									<CircuitBoard class="w-8 h-8 text-primary" />
 								</div>
-								<p class="text-sm text-muted-foreground">Schematic preview would appear here</p>
+								{#if data.project.hasCircuitData}
+									<p class="text-sm text-muted-foreground">Circuit contains {data.project.circuitStats.nodeCount} components</p>
+									<p class="text-xs text-muted-foreground mb-2">and {data.project.circuitStats.edgeCount} connections</p>
+								{:else}
+									<p class="text-sm text-muted-foreground">No circuit data available</p>
+									<p class="text-xs text-muted-foreground mb-2">Start designing in the editor</p>
+								{/if}
 								<Button variant="outline" size="sm" class="mt-2" onclick={handleEdit}>
-									Open Editor
+									{data.project.hasCircuitData ? 'Open Editor' : 'Start Designing'}
 								</Button>
 							</div>
 						</div>
@@ -120,40 +121,48 @@
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						<div>
-							<h4 class="font-medium mb-2">Components Used</h4>
+							<h4 class="font-medium mb-2">Circuit Statistics</h4>
 							<div class="grid grid-cols-2 gap-2 text-sm">
 								<div class="flex justify-between">
-									<span>Resistors:</span>
-									<span>4</span>
+									<span>Nodes:</span>
+									<span>{data.project.circuitStats.nodeCount}</span>
 								</div>
 								<div class="flex justify-between">
-									<span>Capacitors:</span>
-									<span>3</span>
+									<span>Connections:</span>
+									<span>{data.project.circuitStats.edgeCount}</span>
 								</div>
 								<div class="flex justify-between">
-									<span>Transistors:</span>
-									<span>2</span>
+									<span>Total Components:</span>
+									<span class="font-medium">{data.project.components}</span>
 								</div>
-								<div class="flex justify-between">
-									<span>Power Supply:</span>
-									<span>1</span>
-								</div>
-								<div class="flex justify-between">
-									<span>Ground:</span>
-									<span>2</span>
-								</div>
-								<div class="flex justify-between">
-									<span>Total:</span>
-									<span class="font-medium">{project.components}</span>
+								<div class="flex justify-between col-span-2">
+									<span>Circuit Data:</span>
+									<span class="{data.project.hasCircuitData ? 'text-green-600' : 'text-yellow-600'}">
+										{data.project.hasCircuitData ? '✓ Available' : '⚠ No data'}
+									</span>
 								</div>
 							</div>
 						</div>
 						
+						{#if Object.keys(data.project.componentBreakdown).length > 0}
+						<div>
+							<h4 class="font-medium mb-2">Component Breakdown</h4>
+							<div class="grid grid-cols-1 gap-2 text-sm">
+								{#each Object.entries(data.project.componentBreakdown) as [type, count]}
+								<div class="flex justify-between">
+									<span class="capitalize">{type.replace(/([A-Z])/g, ' $1').trim()}:</span>
+									<span>{count}</span>
+								</div>
+								{/each}
+							</div>
+						</div>
+						{/if}
+						
 						<div>
 							<h4 class="font-medium mb-2">Status</h4>
 							<div class="flex items-center gap-2">
-								<div class="w-2 h-2 bg-green-500 rounded-full"></div>
-								<span class="text-sm capitalize">{project.status}</span>
+								<div class="w-2 h-2 rounded-full {data.project.status === 'active' ? 'bg-green-500' : data.project.status === 'completed' ? 'bg-blue-500' : data.project.status === 'draft' ? 'bg-yellow-500' : 'bg-gray-500'}"></div>
+								<span class="text-sm capitalize">{data.project.status}</span>
 							</div>
 						</div>
 						
@@ -168,10 +177,23 @@
 									<Download class="w-4 h-4 mr-2" />
 									Export Schematic
 								</Button>
-								<Button variant="destructive" size="sm" class="w-full justify-start" onclick={handleDelete}>
-									<Trash2 class="w-4 h-4 mr-2" />
-									Delete Project
-								</Button>
+								<form method="POST" action="?/delete" use:enhance={() => {
+									if (!confirm(`Are you sure you want to delete "${data.project.name}"? This action cannot be undone.`)) {
+										return () => {};
+									}
+									isDeleting = true;
+									return async ({ result }) => {
+										isDeleting = false;
+										if (result.type === 'redirect') {
+											goto(result.location);
+										}
+									};
+								}}>
+									<Button type="submit" variant="destructive" size="sm" class="w-full justify-start" disabled={isDeleting}>
+										<Trash2 class="w-4 h-4 mr-2" />
+										{isDeleting ? 'Deleting...' : 'Delete Project'}
+									</Button>
+								</form>
 							</div>
 						</div>
 					</Card.Content>

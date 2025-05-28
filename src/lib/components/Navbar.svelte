@@ -56,21 +56,21 @@
 
 		<!-- Navigation Links (Desktop) -->
 		<div class="hidden md:flex items-center space-x-6">
-			<a href="/" class="text-sm font-medium hover:text-primary transition-colors">
-				Home
-			</a>
 			<a href="/about" class="text-sm font-medium hover:text-primary transition-colors">
 				About
-			</a>
-			<a href="/demo" class="text-sm font-medium hover:text-primary transition-colors">
-				Demo
-			</a>
-			<a href="/test" class="text-sm font-medium hover:text-primary transition-colors">
-				Test
 			</a>
 			{#if $isLoggedIn}
 				<a href="/projects" class="text-sm font-medium hover:text-primary transition-colors">
 					Projects
+				</a>
+				<a href="/editor" class="text-sm font-medium hover:text-primary transition-colors">
+					Schematic Editor
+				</a>
+				<a href="/spice" class="text-sm font-medium hover:text-primary transition-colors">
+					Simulator
+				</a>
+				<a href="/scan" class="text-sm font-medium hover:text-primary transition-colors">
+					Scan
 				</a>
 				<a href="/dashboard" class="text-sm font-medium hover:text-primary transition-colors">
 					Dashboard
@@ -142,21 +142,21 @@
 				{#if showMobileMenu}
 					<div class="absolute right-0 mt-2 w-56 bg-popover border rounded-md shadow-lg z-50">
 						<div class="py-1">
-							<a href="/" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
-								Home
-							</a>
 							<a href="/about" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
 								About
-							</a>
-							<a href="/demo" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
-								Demo
-							</a>
-							<a href="/test" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
-								Test
 							</a>
 							{#if $isLoggedIn}
 								<a href="/projects" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
 									Projects
+								</a>
+								<a href="/editor" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+									Schematic Editor
+								</a>
+								<a href="/simulator" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+									Simulator
+								</a>
+								<a href="/scan" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+									Scan
 								</a>
 								<a href="/dashboard" class="block px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
 									Dashboard

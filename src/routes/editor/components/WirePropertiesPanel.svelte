@@ -4,7 +4,11 @@
 	import type { Edge } from '@xyflow/svelte';
 	import { circuitStore } from '../stores/circuit-store';
 
-	let { selectedWire = $bindable(), edges = $bindable() }: { selectedWire: Edge | null, edges: Edge[] } = $props();
+	let { selectedWire = $bindable(), edges = $bindable(), onRefresh }: { 
+		selectedWire: Edge | null, 
+		edges: Edge[], 
+		onRefresh?: () => void 
+	} = $props();
 
 	const wireShapes = [
 		{ value: 'straight', label: 'Straight', icon: '─' },
@@ -29,27 +33,31 @@
 
 	function updateWireShape(shape: string) {
 		if (selectedWire) {
-			// Update the store
+			// Update the store first
 			circuitStore.updateWireStyle(selectedWire.id, shape);
 			
-			// Update the local edges array directly for immediate visual feedback
-			edges = edges.map(edge => 
-				edge.id === selectedWire?.id
-					? { 
-						...edge, 
-						data: { 
-							...edge.data, 
-							wireShape: shape 
-						} 
+			// Force immediate update of local edges array
+			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
+			if (edgeIndex !== -1) {
+				edges[edgeIndex] = {
+					...edges[edgeIndex],
+					data: {
+						...edges[edgeIndex].data,
+						wireShape: shape
 					}
-					: edge
-			);
+				};
+				// Trigger reactivity by creating new array
+				edges = [...edges];
+			}
 
 			// Update the selectedWire for immediate UI feedback in the panel
 			selectedWire = {
 				...selectedWire,
 				data: { ...selectedWire.data, wireShape: shape }
 			};
+
+			// Call refresh function if provided
+			onRefresh?.();
 		}
 	}
 
@@ -57,31 +65,35 @@
 		if (selectedWire) {
 			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
 			
-			// Update the store
+			// Update the store first
 			circuitStore.updateWireStyle(
 				selectedWire.id,
 				currentShape,
 				style
 			);
 			
-			// Update the local edges array directly for immediate visual feedback
-			edges = edges.map(edge => 
-				edge.id === selectedWire?.id
-					? { 
-						...edge, 
-						data: { 
-							...edge.data, 
-							wireStyle: style 
-						} 
+			// Force immediate update of local edges array
+			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
+			if (edgeIndex !== -1) {
+				edges[edgeIndex] = {
+					...edges[edgeIndex],
+					data: {
+						...edges[edgeIndex].data,
+						wireStyle: style
 					}
-					: edge
-			);
+				};
+				// Trigger reactivity by creating new array
+				edges = [...edges];
+			}
 
 			// Update the selectedWire for immediate UI feedback in the panel
 			selectedWire = {
 				...selectedWire,
 				data: { ...selectedWire.data, wireStyle: style }
 			};
+
+			// Call refresh function if provided
+			onRefresh?.();
 		}
 	}
 
@@ -90,7 +102,7 @@
 			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
 			const currentStyle = (selectedWire.data as any)?.wireStyle || 'solid';
 			
-			// Update the store
+			// Update the store first
 			circuitStore.updateWireStyle(
 				selectedWire.id,
 				currentShape,
@@ -98,18 +110,19 @@
 				color
 			);
 			
-			// Update the local edges array directly for immediate visual feedback
-			edges = edges.map(edge => 
-				edge.id === selectedWire?.id
-					? { 
-						...edge, 
-						data: { 
-							...edge.data, 
-							color: color 
-						} 
+			// Force immediate update of local edges array
+			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
+			if (edgeIndex !== -1) {
+				edges[edgeIndex] = {
+					...edges[edgeIndex],
+					data: {
+						...edges[edgeIndex].data,
+						color: color
 					}
-					: edge
-			);
+				};
+				// Trigger reactivity by creating new array
+				edges = [...edges];
+			}
 
 			// Update the selectedWire for immediate UI feedback in the panel
 			selectedWire = {

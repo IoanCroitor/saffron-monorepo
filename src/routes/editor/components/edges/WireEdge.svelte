@@ -17,11 +17,11 @@
 		...restProps
 	}: EdgeProps = $props();
 
-	// Wire style configuration
-	const wireShape = data?.wireShape || 'straight'; // 'straight', 'bezier', 'smoothstep'
-	const wireStyle = data?.wireStyle || 'solid'; // 'solid', 'dashed', 'dotted'
-	const wireColor = data?.color || '#64748b'; // Default gray
-	const wireWidth = selected ? 3 : 2;
+	// Wire style configuration - made reactive with $derived
+	const wireShape = $derived(data?.wireShape || 'straight'); // 'straight', 'bezier', 'smoothstep'
+	const wireStyle = $derived(data?.wireStyle || 'solid'); // 'solid', 'dashed', 'dotted'
+	const wireColor = $derived(data?.color || '#64748b'); // Default gray
+	const wireWidth = $derived(selected ? 3 : 2);
 
 	// Generate path based on wire shape
 	const [edgePath, labelX, labelY] = $derived((() => {

@@ -76,25 +76,38 @@
 								<span class="ml-2 text-sm text-muted-foreground">{$currentUser?.id || data.user?.id || 'N/A'}</span>
 							</div>
 						</div>
+						<div class="mt-4">
+							<Button variant="destructive" onclick={handleLogout} class="w-full">
+								Logout
+							</Button>
+						</div>
 					</Card.Content>
 				</Card.Root>
 
-				<!-- Quick Actions Card -->
+				<!-- API Keys Card -->
 				<Card.Root>
 					<Card.Header>
-						<Card.Title>Quick Actions</Card.Title>
-						<Card.Description>Common tasks and features</Card.Description>
+						<Card.Title>API Keys</Card.Title>
+						<Card.Description>Manage your API keys</Card.Description>
 					</Card.Header>
 					<Card.Content>
-						<div class="space-y-3">
-							<Button href="/test" class="w-full">
+						<div class="space-y-4">
+							<div>
+								<h4 class="font-medium mb-1">Saffron API Key</h4>
+								<p class="text-sm text-muted-foreground">
+									{$currentUser?.api_key || 'Not set'} 
+									<!-- Placeholder for API key display/management -->
+								</p>
+							</div>
+							<div>
+								<h4 class="font-medium mb-1">Gemini API Key</h4>
+								<p class="text-sm text-muted-foreground">
+									{'Enter your Gemini API Key' || 'Not set'}
+									<!-- Placeholder for Gemini API key input/display -->
+								</p>
+							</div>
+							<Button href="/test" class="w-full mt-2">
 								Launch Circuit Designer
-							</Button>
-							<Button variant="outline" href="/demo" class="w-full">
-								View Demo
-							</Button>
-							<Button variant="outline" href="/about" class="w-full">
-								Learn More
 							</Button>
 						</div>
 					</Card.Content>
@@ -114,52 +127,12 @@
 							</div>
 							<div class="flex justify-between">
 								<span>Account created</span>
-								<span class="text-muted-foreground">Demo session</span>
-							</div>
-							<div class="text-center text-muted-foreground py-4">
-								<p>This is a demo authentication system.</p>
-								<p>No real data is stored.</p>
+								<span class="text-muted-foreground">Active</span>
 							</div>
 						</div>
 					</Card.Content>
 				</Card.Root>
 			</div>
-
-			<!-- Demo Information -->
-			<Card.Root class="mt-8">
-				<Card.Header>
-					<Card.Title>Demo Authentication System</Card.Title>
-					<Card.Description>How this mock authentication works</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<div class="prose prose-sm max-w-none">
-						<p class="mb-4">
-							This is a demonstration authentication system that uses local storage and a JSON file for mock users. 
-							Here's what's included:
-						</p>
-						<ul class="space-y-2 mb-4">
-							<li>✅ Login and signup forms with validation</li>
-							<li>✅ User session management with localStorage</li>
-							<li>✅ Protected routes and authentication checks</li>
-							<li>✅ Responsive navigation with user menu</li>
-							<li>✅ Mock user data from JSON file</li>
-						</ul>
-						<p class="mb-4">
-							<strong>Demo Accounts:</strong>
-						</p>
-						<div class="bg-muted p-4 rounded-lg">
-							<p class="mb-2"><code>admin@example.com</code> / <code>admin123</code></p>
-							<p class="mb-2"><code>user@example.com</code> / <code>user123</code></p>
-							<p><code>test@example.com</code> / <code>test123</code></p>
-						</div>
-					</div>
-				</Card.Content>
-				<Card.Footer>
-					<Button variant="destructive" onclick={handleLogout}>
-						Logout
-					</Button>
-				</Card.Footer>
-			</Card.Root>
 		</div>
 	</div>
 {:else}
