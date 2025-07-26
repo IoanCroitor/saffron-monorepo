@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { BaseEdge, getStraightPath, getBezierPath, getSmoothStepPath, type EdgeProps } from '@xyflow/svelte';
+	import {
+		BaseEdge,
+		getStraightPath,
+		getBezierPath,
+		getSmoothStepPath,
+		type EdgeProps
+	} from '@xyflow/svelte';
 
 	// Use Svelte 5 props syntax
 	let {
@@ -24,35 +30,37 @@
 	const wireWidth = $derived(selected ? 3 : 2);
 
 	// Generate path based on wire shape
-	const [edgePath, labelX, labelY] = $derived((() => {
-		const pathParams = {
-			sourceX,
-			sourceY,
-			sourcePosition,
-			targetX,
-			targetY,
-			targetPosition
-		};
+	const [edgePath, labelX, labelY] = $derived(
+		(() => {
+			const pathParams = {
+				sourceX,
+				sourceY,
+				sourcePosition,
+				targetX,
+				targetY,
+				targetPosition
+			};
 
-		switch (wireShape) {
-			case 'bezier':
-				return getBezierPath(pathParams);
-			case 'smoothstep':
-				return getSmoothStepPath(pathParams);
-			case 'straight':
-			default:
-				const [path] = getStraightPath({
-					sourceX,
-					sourceY,
-					targetX,
-					targetY
-				});
-				// Calculate label position for straight lines
-				const midX = (sourceX + targetX) / 2;
-				const midY = (sourceY + targetY) / 2;
-				return [path, midX, midY];
-		}
-	})());
+			switch (wireShape) {
+				case 'bezier':
+					return getBezierPath(pathParams);
+				case 'smoothstep':
+					return getSmoothStepPath(pathParams);
+				case 'straight':
+				default:
+					const [path] = getStraightPath({
+						sourceX,
+						sourceY,
+						targetX,
+						targetY
+					});
+					// Calculate label position for straight lines
+					const midX = (sourceX + targetX) / 2;
+					const midY = (sourceY + targetY) / 2;
+					return [path, midX, midY];
+			}
+		})()
+	);
 
 	// Generate stroke-dasharray based on wire style
 	const strokeDasharray = $derived(() => {
@@ -75,8 +83,8 @@
 		console.log('Wire clicked:', { id, wireShape, wireStyle, data });
 		// Dispatch event to parent for wire selection
 		const event = new CustomEvent('wireSelected', {
-			detail: { 
-				id, 
+			detail: {
+				id,
 				source,
 				target,
 				sourceHandle: restProps.sourceHandleId,
@@ -130,31 +138,34 @@
 <style>
 	.wire-path {
 		cursor: pointer;
-		transition: stroke-width 0.2s ease, stroke 0.2s ease;
+		transition:
+			stroke-width 0.2s ease,
+			stroke 0.2s ease;
 	}
-	
+
 	.wire-path:hover {
 		stroke-width: 3;
 	}
-	
+
 	.wire-selected {
 		animation: wire-pulse 1.5s ease-in-out infinite;
 	}
-	
+
 	.wire-label {
 		font-family: monospace;
 		opacity: 0.8;
 	}
-	
+
 	@keyframes wire-pulse {
-		0%, 100% {
+		0%,
+		100% {
 			opacity: 1;
 		}
 		50% {
 			opacity: 0.6;
 		}
 	}
-	
+
 	:global(.svelte-flow__edge-path) {
 		transition: all 0.2s ease;
 	}

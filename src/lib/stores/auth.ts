@@ -20,11 +20,14 @@ let hasInitialized = false;
 const supabase = createSupabaseBrowserClient();
 
 // Authentication functions using Supabase
-export async function login(email: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> {
+export async function login(
+	email: string,
+	password: string
+): Promise<{ success: boolean; error?: string; user?: User }> {
 	try {
 		const { data, error } = await supabase.auth.signInWithPassword({
 			email,
-			password,
+			password
 		});
 
 		if (error) {
@@ -46,8 +49,11 @@ export async function login(email: string, password: string): Promise<{ success:
 			};
 
 			currentUser.set(user);
+			console.log('[auth.ts] Set currentUser:', user);
 			isLoggedIn.set(true);
+			console.log('[auth.ts] Set isLoggedIn: true');
 			sessionStore.set(data.session);
+			console.log('[auth.ts] Set sessionStore:', data.session);
 
 			return { success: true, user };
 		}
@@ -58,7 +64,11 @@ export async function login(email: string, password: string): Promise<{ success:
 	}
 }
 
-export async function signup(email: string, password: string, name: string): Promise<{ success: boolean; error?: string; user?: User }> {
+export async function signup(
+	email: string,
+	password: string,
+	name: string
+): Promise<{ success: boolean; error?: string; user?: User }> {
 	try {
 		const { data, error } = await supabase.auth.signUp({
 			email,
@@ -76,7 +86,7 @@ export async function signup(email: string, password: string, name: string): Pro
 
 		if (data.user) {
 			// Profile will be created automatically by database trigger
-			
+
 			// If user is confirmed immediately (email confirmation disabled)
 			if (data.session) {
 				const user: User = {
@@ -106,13 +116,13 @@ export async function signup(email: string, password: string, name: string): Pro
 export async function logout(): Promise<void> {
 	try {
 		console.log('Starting logout process');
-		
+
 		// Use fetch to call the server logout endpoint
 		const response = await fetch('/logout', {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-			},
+				'Content-Type': 'application/x-www-form-urlencoded'
+			}
 		});
 
 		if (response.redirected) {
@@ -138,26 +148,29 @@ export async function logout(): Promise<void> {
 }
 
 // Initialize auth state from session (using secure user data)
-export async function initializeAuth(initialSession: Session | null, initialUser: SupabaseUser | null) {
+export async function initializeAuth(
+	initialSession: Session | null,
+	initialUser: SupabaseUser | null
+) {
 	// Prevent duplicate initialization
 	if (isInitializing) {
 		console.log('Auth initialization already in progress, skipping...');
 		return;
 	}
-	
+
 	isInitializing = true;
-	
-	console.log('Initializing auth with:', { 
-		hasSession: !!initialSession, 
-		hasUser: !!initialUser, 
+
+	console.log('Initializing auth with:', {
+		hasSession: !!initialSession,
+		hasUser: !!initialUser,
 		userId: initialUser?.id,
 		hasInitialized
 	});
-	
+
 	try {
 		if (initialSession && initialUser) {
 			sessionStore.set(initialSession);
-			
+
 			// Get profile data using the authenticated user
 			try {
 				const { data: profile } = await supabase
@@ -171,7 +184,7 @@ export async function initializeAuth(initialSession: Session | null, initialUser
 					email: initialUser.email || '',
 					name: profile?.name || initialUser.user_metadata?.name || 'User'
 				};
-				
+
 				console.log('Setting user as logged in:', user);
 				currentUser.set(user);
 				isLoggedIn.set(true);
@@ -183,7 +196,7 @@ export async function initializeAuth(initialSession: Session | null, initialUser
 					email: initialUser.email || '',
 					name: initialUser.user_metadata?.name || 'User'
 				};
-				
+
 				console.log('Setting user as logged in (fallback):', user);
 				currentUser.set(user);
 				isLoggedIn.set(true);
@@ -194,7 +207,7 @@ export async function initializeAuth(initialSession: Session | null, initialUser
 			isLoggedIn.set(false);
 			sessionStore.set(null);
 		}
-		
+
 		hasInitialized = true;
 	} finally {
 		isInitializing = false;
@@ -219,17 +232,20 @@ export function forceRefreshAuth() {
 if (typeof window !== 'undefined') {
 	supabase.auth.onAuthStateChange(async (event, session) => {
 		console.log('Auth state change:', { event, hasSession: !!session, hasInitialized });
-		
+
 		// Only handle auth changes if we've completed initial server-side initialization
 		// This prevents conflicts between server and client state
 		if (!hasInitialized) {
 			console.log('Skipping auth state change - not yet initialized from server');
 			return;
 		}
-		
+
 		if (event === 'SIGNED_IN' && session) {
 			// Use getUser() for authenticated user data instead of session.user
-			const { data: { user }, error } = await supabase.auth.getUser();
+			const {
+				data: { user },
+				error
+			} = await supabase.auth.getUser();
 			if (user && !error) {
 				// Reset the initialization flag to allow this update
 				hasInitialized = false;
@@ -243,7 +259,10 @@ if (typeof window !== 'undefined') {
 			hasInitialized = true; // Keep as initialized but logged out
 		} else if (event === 'TOKEN_REFRESHED' && session) {
 			// Also refresh user data when token is refreshed
-			const { data: { user }, error } = await supabase.auth.getUser();
+			const {
+				data: { user },
+				error
+			} = await supabase.auth.getUser();
 			if (user && !error) {
 				// Reset the initialization flag to allow this update
 				hasInitialized = false;
