@@ -80,6 +80,7 @@
 		console.log('Nodes:', nodes);
 		console.log('Edges:', edges);
 	});
+
 	let selectedNode = $state<Node | null>(null);
 	let selectedWire = $state<Edge | null>(null);
 	let isDragOver = $state(false);
@@ -436,18 +437,20 @@
 			position.x = Math.max(-5000, Math.min(5000, position.x));
 			position.y = Math.max(-5000, Math.min(5000, position.y));
 
-			if (isCollaborative && !isReadOnlyMode) {
-				// Optimized throttling for real-time updates
-				clearTimeout(dragUpdateTimeout);
-				dragUpdateTimeout = setTimeout(() => {
-					try {
-						circuitStore.updateNodePosition(node.id, position);
+			// Always update store with throttling for performance
+			clearTimeout(dragUpdateTimeout);
+			dragUpdateTimeout = setTimeout(() => {
+				try {
+					circuitStore.updateNodePosition(node.id, position);
+
+					// Broadcast to collaborators if in collaborative mode
+					if (isCollaborative && !isReadOnlyMode) {
 						broadcastNodeMovement(node.id, position);
-					} catch (error) {
-						console.warn('Error updating node position during drag:', error);
 					}
-				}, 50); // Faster updates for better real-time feel
-			}
+				} catch (error) {
+					console.warn('Error updating node position during drag:', error);
+				}
+			}, 50); // Faster updates for better real-time feel
 		} catch (error) {
 			console.error('Error in onNodeDrag:', error);
 		}

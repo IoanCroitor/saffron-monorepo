@@ -3,7 +3,32 @@ import type { Node, Edge } from '@xyflow/svelte';
 import { createSupabaseBrowserClient } from '$lib/supabase';
 import type { Database } from '$lib/types/database.types';
 import { browser } from '$app/environment';
-import { saveCircuitChanges } from '../services/collaboration';
+
+// Simple save function for circuit changes
+async function saveCircuitChanges(projectId: string | null, data: any): Promise<boolean> {
+	if (!projectId || !browser) return false;
+
+	try {
+		const supabase = createSupabaseBrowserClient();
+		const { error } = await supabase
+			.from('projects')
+			.update({
+				schematic_data: data,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', projectId);
+
+		if (error) {
+			console.error('Error saving circuit changes:', error);
+			return false;
+		}
+
+		return true;
+	} catch (error) {
+		console.error('Error saving circuit changes:', error);
+		return false;
+	}
+}
 
 interface ComponentParameters {
 	[key: string]: any;
@@ -206,41 +231,81 @@ function createCircuitStore() {
 			});
 		},
 		removeComponent: (id: string) => {
-			update((store) => ({
-				...store,
-				nodes: store.nodes.filter((node) => node.id !== id),
-				edges: store.edges.filter((edge) => edge.source !== id && edge.target !== id)
-			}));
+			update((store) => {
+				const updatedStore = {
+					...store,
+					nodes: store.nodes.filter((node) => node.id !== id),
+					edges: store.edges.filter((edge) => edge.source !== id && edge.target !== id),
+					pendingChanges: true
+				};
+
+				// Trigger save if collaborative
+				if (store.isCollaborative) {
+					debouncedSave(updatedStore);
+				}
+
+				return updatedStore;
+			});
 		},
 		addConnection: (edge: Edge) => {
-			update((store) => ({
-				...store,
-				edges: [...store.edges, edge]
-			}));
+			update((store) => {
+				const updatedStore = {
+					...store,
+					edges: [...store.edges, edge],
+					pendingChanges: true
+				};
+
+				// Trigger save if collaborative
+				if (store.isCollaborative) {
+					debouncedSave(updatedStore);
+				}
+
+				return updatedStore;
+			});
 		},
 		removeConnection: (edgeId: string) => {
-			update((store) => ({
-				...store,
-				edges: store.edges.filter((edge) => edge.id !== edgeId)
-			}));
+			update((store) => {
+				const updatedStore = {
+					...store,
+					edges: store.edges.filter((edge) => edge.id !== edgeId),
+					pendingChanges: true
+				};
+
+				// Trigger save if collaborative
+				if (store.isCollaborative) {
+					debouncedSave(updatedStore);
+				}
+
+				return updatedStore;
+			});
 		},
 		updateWireStyle: (edgeId: string, wireShape: string, wireStyle?: string, color?: string) => {
-			update((store) => ({
-				...store,
-				edges: store.edges.map((edge) =>
-					edge.id === edgeId
-						? {
-								...edge,
-								data: {
-									...edge.data,
-									wireShape,
-									...(wireStyle && { wireStyle }),
-									...(color && { color })
+			update((store) => {
+				const updatedStore = {
+					...store,
+					edges: store.edges.map((edge) =>
+						edge.id === edgeId
+							? {
+									...edge,
+									data: {
+										...edge.data,
+										wireShape,
+										...(wireStyle && { wireStyle }),
+										...(color && { color })
+									}
 								}
-							}
-						: edge
-				)
-			}));
+							: edge
+					),
+					pendingChanges: true
+				};
+
+				// Trigger save if collaborative
+				if (store.isCollaborative) {
+					debouncedSave(updatedStore);
+				}
+
+				return updatedStore;
+			});
 		},
 		exportNetlist: () => {
 			let state: any;

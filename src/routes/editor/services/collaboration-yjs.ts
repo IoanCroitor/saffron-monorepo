@@ -3,28 +3,8 @@ import { get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { circuitStore } from '../stores/circuit-store';
 import { getRandomColor, getUserColor } from '$lib/utils/color-utils';
-import { createSupabaseBrowserClient } from '$lib/supabase';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { YJS_CONFIG } from './collaboration-config';
-
-/**
- * Safely serialize data for Yjs, avoiding Svelte proxy issues
- */
-function safeSerialize(data: any): any {
-	if (data === null || data === undefined) return data;
-	if (typeof data !== 'object') return data;
-	if (Array.isArray(data)) return data.map(safeSerialize);
-
-	// For objects, create a plain object with serialized properties
-	const serialized: any = {};
-	for (const key in data) {
-		if (data.hasOwnProperty(key)) {
-			serialized[key] = safeSerialize(data[key]);
-		}
-	}
-	return serialized;
-}
 
 export interface UserCursor {
 	userId: string;
@@ -60,7 +40,7 @@ let currentUserId: string | null = null;
 
 // Throttling for cursor updates
 let cursorUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
-const CURSOR_DEBOUNCE_TIME = YJS_CONFIG.cursorDebounceTime;
+const CURSOR_DEBOUNCE_TIME = 50;
 
 /**
  * Initialize Yjs collaboration for a project
@@ -94,10 +74,11 @@ export async function initCollaboration(projectId: string, userId?: string, user
 		edgesMap = ydoc.getMap('edges');
 		awarenessMap = ydoc.getMap('awareness');
 
-		// Create WebSocket provider to connect to your Docker Yjs server
+		// Create WebSocket provider (you'll need to set up a WebSocket server)
+		// For now, using a public server - replace with your own server
 		provider = new WebsocketProvider(
-			YJS_CONFIG.wsUrl,
-			`${YJS_CONFIG.roomPrefix}-${projectId}`,
+			'ws://localhost:1234', // Replace with your WebSocket server
+			`saffron-project-${projectId}`,
 			ydoc
 		);
 
@@ -202,13 +183,12 @@ function updateCollaboratorsFromAwareness() {
 export function broadcastNodeMovement(nodeId: string, position: { x: number; y: number }) {
 	if (!nodesMap || !currentUserId) return;
 
-	// Use safe serialization to avoid Svelte proxy issues
-	const nodeData = safeSerialize({
+	const nodeData = {
 		id: nodeId,
 		position,
 		userId: currentUserId,
 		timestamp: Date.now()
-	});
+	};
 
 	nodesMap.set(nodeId, nodeData);
 }
@@ -226,14 +206,13 @@ export function broadcastComponentAdded(
 ) {
 	if (!nodesMap || !currentUserId) return;
 
-	// Use safe serialization to avoid Svelte proxy issues
-	const nodeData = safeSerialize({
+	const nodeData = {
 		id,
 		type,
 		position,
 		userId: currentUserId,
 		timestamp: Date.now()
-	});
+	};
 
 	nodesMap.set(id, nodeData);
 }
@@ -255,18 +234,11 @@ export function broadcastComponentRemoved(id: string) {
 export function broadcastConnectionAdded(edge: any) {
 	if (!edgesMap || !currentUserId) return;
 
-	// Use safe serialization to avoid Svelte proxy issues
-	const edgeData = safeSerialize({
-		id: edge.id,
-		source: edge.source,
-		target: edge.target,
-		sourceHandle: edge.sourceHandle,
-		targetHandle: edge.targetHandle,
-		type: edge.type,
-		data: edge.data,
+	const edgeData = {
+		...edge,
 		userId: currentUserId,
 		timestamp: Date.now()
-	});
+	};
 
 	edgesMap.set(edge.id, edgeData);
 }
@@ -301,16 +273,14 @@ export function updateCursorPosition(
 
 	cursorUpdateTimeout = setTimeout(() => {
 		const userInfo = get(userCollabInfo);
-
-		// Use safe serialization to avoid Svelte proxy issues
-		const awarenessData = safeSerialize({
+		const awarenessData = {
 			position,
 			action,
 			nodeId,
 			name: userInfo.name,
 			color: userInfo.color,
 			timestamp: Date.now()
-		});
+		};
 
 		awarenessMap!.set(currentUserId!, awarenessData);
 	}, CURSOR_DEBOUNCE_TIME);
@@ -330,15 +300,14 @@ export function updateCursorAction(
 	const currentAwareness = awarenessMap.get(currentUserId) || {};
 	const userInfo = get(userCollabInfo);
 
-	// Use safe serialization to avoid Svelte proxy issues
-	const awarenessData = safeSerialize({
+	const awarenessData = {
 		...currentAwareness,
 		action,
 		nodeId,
 		name: userInfo.name,
 		color: userInfo.color,
 		timestamp: Date.now()
-	});
+	};
 
 	awarenessMap.set(currentUserId, awarenessData);
 }
@@ -463,50 +432,6 @@ export function loadCircuitStateFromYjs() {
 	circuitStore.loadFromJson({ nodes, edges });
 }
 
-/**
- * Checks if a user has edit rights for a project
- * @param projectId The project ID to check
- */
-export async function hasEditRights(projectId: string): Promise<boolean> {
-	if (!browser) return false;
-
-	try {
-		const supabase = createSupabaseBrowserClient();
-		const {
-			data: { user }
-		} = await supabase.auth.getUser();
-		if (!user) return false;
-
-		// Check if owner
-		const { data: project } = await supabase
-			.from('projects')
-			.select('user_id')
-			.eq('id', projectId)
-			.single();
-
-		if (project && project.user_id === user.id) {
-			return true;
-		}
-
-		// Check if collaborator with edit rights
-		const { data: collaborator } = await supabase
-			.from('project_collaborators')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', user.id)
-			.single();
-
-		if (collaborator && ['owner', 'editor'].includes(collaborator.role)) {
-			return true;
-		}
-
-		return false;
-	} catch (error) {
-		console.error('Error checking edit rights:', error);
-		return false;
-	}
-}
-
 // Simplified API for external use
 export const collaboration = {
 	init: initCollaboration,
@@ -520,6 +445,5 @@ export const collaboration = {
 	updateCursorAction,
 	generateComponentId,
 	getCurrentState: getCurrentCircuitState,
-	loadState: loadCircuitStateFromYjs,
-	hasEditRights
+	loadState: loadCircuitStateFromYjs
 };
