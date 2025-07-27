@@ -1,44 +1,16 @@
 <script lang="ts">
-	import { currentUser, isLoggedIn, logout, initializeAuth } from '$lib/stores/auth.js';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	
+
 	let { data } = $props();
-	
-	// Initialize auth state from server data immediately
-	$effect(() => {
-		console.log('Dashboard: Server data check', { 
-			hasSession: !!data.session, 
-			hasUser: !!data.user, 
-			userId: data.user?.id,
-			userEmail: data.user?.email 
-		});
-		
-		if (data.session && data.user) {
-			initializeAuth(data.session, data.user);
-		}
-	});
-	
-	// Simple redirect logic - only redirect if we definitively have no auth
-	$effect(() => {
-		console.log('Dashboard: Auth check', { 
-			serverSession: !!data.session, 
-			serverUser: !!data.user, 
-			clientLoggedIn: $isLoggedIn,
-			clientUser: !!$currentUser
-		});
-		
-		// If server says no session and client store also says not logged in
-		if (!data.session && !data.user && !$isLoggedIn) {
-			console.log('Dashboard: Redirecting to login - no auth found');
-			goto('/login');
-		}
-	});
-	
+	let { session, user, supabase } = $derived(data);
+
 	async function handleLogout() {
-		await logout();
+		if (supabase) {
+			await supabase.auth.signOut();
+		}
+		goto('/');
 	}
 </script>
 
@@ -46,12 +18,14 @@
 	<title>Dashboard - Saffron</title>
 </svelte:head>
 
-{#if (data.session && data.user) || ($isLoggedIn && $currentUser)}
-	<div class="min-h-screen bg-background">
-		<div class="container mx-auto py-8 px-4">
+{#if session && user}
+	<div class="bg-background min-h-screen">
+		<div class="container mx-auto px-4 py-8">
 			<div class="mb-8">
-				<h1 class="text-3xl font-bold mb-2">Welcome to your Dashboard</h1>
-				<p class="text-muted-foreground">Hello, {$currentUser?.name || data.user?.user_metadata?.name || 'User'}! You're successfully logged in.</p>
+				<h1 class="mb-2 text-3xl font-bold">Welcome to your Dashboard</h1>
+				<p class="text-muted-foreground">
+					Hello, {user.user_metadata?.name || user.email || 'User'}! You're successfully logged in.
+				</p>
 			</div>
 
 			<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -65,21 +39,19 @@
 						<div class="space-y-2">
 							<div>
 								<span class="font-medium">Name:</span>
-								<span class="ml-2">{$currentUser?.name || data.user?.user_metadata?.name || 'User'}</span>
+								<span class="ml-2">{user.user_metadata?.name || 'User'}</span>
 							</div>
 							<div>
 								<span class="font-medium">Email:</span>
-								<span class="ml-2">{$currentUser?.email || data.user?.email || 'N/A'}</span>
+								<span class="ml-2">{user.email || 'N/A'}</span>
 							</div>
 							<div>
 								<span class="font-medium">User ID:</span>
-								<span class="ml-2 text-sm text-muted-foreground">{$currentUser?.id || data.user?.id || 'N/A'}</span>
+								<span class="text-muted-foreground ml-2 text-sm">{user.id || 'N/A'}</span>
 							</div>
 						</div>
 						<div class="mt-4">
-							<Button variant="destructive" onclick={handleLogout} class="w-full">
-								Logout
-							</Button>
+							<Button variant="destructive" onclick={handleLogout} class="w-full">Logout</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -93,22 +65,20 @@
 					<Card.Content>
 						<div class="space-y-4">
 							<div>
-								<h4 class="font-medium mb-1">Saffron API Key</h4>
-								<p class="text-sm text-muted-foreground">
-									{$currentUser?.api_key || 'Not set'} 
+								<h4 class="mb-1 font-medium">Saffron API Key</h4>
+								<p class="text-muted-foreground text-sm">
+									Not set
 									<!-- Placeholder for API key display/management -->
 								</p>
 							</div>
 							<div>
-								<h4 class="font-medium mb-1">Gemini API Key</h4>
-								<p class="text-sm text-muted-foreground">
-									{'Not set'}
+								<h4 class="mb-1 font-medium">Gemini API Key</h4>
+								<p class="text-muted-foreground text-sm">
+									Not set
 									<!-- Placeholder for Gemini API key input/display -->
 								</p>
 							</div>
-							<Button href="/test" class="w-full mt-2">
-								Launch Circuit Designer
-							</Button>
+							<Button href="/test" class="mt-2 w-full">Launch Circuit Designer</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -136,9 +106,9 @@
 		</div>
 	</div>
 {:else}
-	<div class="min-h-screen flex items-center justify-center">
+	<div class="flex min-h-screen items-center justify-center">
 		<div class="text-center">
-			<h1 class="text-2xl font-bold mb-4">Loading...</h1>
+			<h1 class="mb-4 text-2xl font-bold">Loading...</h1>
 			<p class="text-muted-foreground">Checking authentication status...</p>
 		</div>
 	</div>

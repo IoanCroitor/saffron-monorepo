@@ -1,19 +1,17 @@
 <script lang="ts">
 	import SignupForm from "$lib/components/signup-form.svelte";
-	import { onMount } from "svelte";
-	import { isLoggedIn } from "$lib/stores/auth.js";
+	import { page } from "$app/stores";
 	import { goto } from "$app/navigation";
 	
-	let { form } = $props();
+	let { form, data } = $props();
 	
-	onMount(() => {
-		const unsubscribe = isLoggedIn.subscribe((loggedIn) => {
-			if (loggedIn) {
-				goto("/");
-			}
-		});
-		
-		return unsubscribe;
+	// Check if user is already logged in from server data
+	const user = $derived(data.user);
+	
+	$effect(() => {
+		if (user) {
+			goto("/");
+		}
 	});
 </script>
 
