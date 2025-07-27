@@ -231,12 +231,21 @@ export function forceRefreshAuth() {
 // Listen for auth state changes
 if (typeof window !== 'undefined') {
 	supabase.auth.onAuthStateChange(async (event, session) => {
-		console.log('Auth state change:', { event, hasSession: !!session, hasInitialized });
+		console.log('Auth state change:', {
+			event,
+			hasSession: !!session,
+			hasInitialized,
+			timestamp: new Date().toISOString()
+		});
 
 		// Only handle auth changes if we've completed initial server-side initialization
 		// This prevents conflicts between server and client state
 		if (!hasInitialized) {
-			console.log('Skipping auth state change - not yet initialized from server');
+			console.log(
+				'Skipping auth state change - not yet initialized from server',
+				'| [auth.ts] at',
+				new Date().toISOString()
+			);
 			return;
 		}
 

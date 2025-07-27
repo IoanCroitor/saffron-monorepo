@@ -14,16 +14,18 @@
 		if (browser) {
 			// Always call initializeAuth, even with null values
 			// This ensures the stores are properly set on the client
-			console.log('Layout effect triggered with data:', { 
-				hasSession: !!data.session, 
-				hasUser: !!data.user 
+			console.log('Layout effect triggered with data:', {
+				hasSession: !!data.session,
+				hasUser: !!data.user
 			});
 			initializeAuth(data.session, data.user);
 		}
 	});
 
 	onMount(() => {
-		const { data: { subscription } } = data.supabase.auth.onAuthStateChange((event, _session) => {
+		const {
+			data: { subscription }
+		} = data.supabase.auth.onAuthStateChange((event, _session) => {
 			if (_session?.expires_at !== data.session?.expires_at) {
 				invalidate('supabase:auth');
 			}
@@ -34,7 +36,7 @@
 </script>
 
 <ModeWatcher />
-<div class="min-h-screen bg-background">
+<div class="bg-background min-h-screen">
 	<Navbar />
 	<main>
 		{@render children()}

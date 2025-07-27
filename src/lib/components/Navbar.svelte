@@ -37,7 +37,14 @@
 			showMobileMenu = false;
 		}
 	}
-	$: console.log('[Navbar] $isLoggedIn:', $isLoggedIn, '| $currentUser:', $currentUser);
+	$: console.log(
+		'[Navbar] $isLoggedIn:',
+		$isLoggedIn,
+		'| $currentUser:',
+		$currentUser,
+		'| [Navbar] Rendered at',
+		new Date().toISOString()
+	);
 </script>
 
 <svelte:window on:click={handleClickOutside} />
