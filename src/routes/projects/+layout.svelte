@@ -1,27 +1,20 @@
 <script lang="ts">
-	import { isLoggedIn } from '$lib/stores/auth.js';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	
+	console.log('[projects/+layout.svelte] session:', $page.data.session, 'user:', $page.data.user);
+	import { page } from '$app/stores';
+
 	let { children } = $props();
-	
-	onMount(() => {
-		const unsubscribe = isLoggedIn.subscribe((loggedIn) => {
-			if (!loggedIn) {
-				goto('/login');
-			}
-		});
-		
-		return unsubscribe;
-	});
+
+	// Use the session data from the root layout
+	let session = $derived($page.data.session);
+	let user = $derived($page.data.user);
 </script>
 
-{#if $isLoggedIn}
+{#if session && user}
 	{@render children()}
 {:else}
-	<div class="min-h-screen flex items-center justify-center">
+	<div class="flex min-h-screen items-center justify-center">
 		<div class="text-center">
-			<h1 class="text-2xl font-bold mb-4">Authentication Required</h1>
+			<h1 class="mb-4 text-2xl font-bold">Authentication Required</h1>
 			<p class="text-muted-foreground mb-4">You need to be logged in to access this page.</p>
 			<a href="/login" class="text-primary hover:underline">Go to Login</a>
 		</div>

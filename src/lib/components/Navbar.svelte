@@ -3,8 +3,13 @@
 	import { Menu, User, LogIn, UserPlus, ChevronDown, LogOut, Settings } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import { currentUser, isLoggedIn, logout } from '$lib/stores/auth.js';
 	import { goto } from '$app/navigation';
+	import type { Session, SupabaseClient } from '@supabase/supabase-js';
+	import type { Database } from '$lib/types/database.types';
+
+	// Accept props for session and supabase
+	export let session: Session | null = null;
+	export let supabase: SupabaseClient<Database> | null = null;
 
 	let showMobileMenu = false;
 
@@ -17,13 +22,14 @@
 	}
 
 	async function handleLogout() {
-		await logout();
+		if (supabase) {
+			await supabase.auth.signOut();
+		}
 		goto('/'); // Redirect to home after logout
 	}
 
 	function handleProfile() {
-		// Replace with your profile logic
-		console.log('Profile clicked');
+		goto('/dashboard');
 	}
 
 	function toggleMobileMenu() {
@@ -37,14 +43,6 @@
 			showMobileMenu = false;
 		}
 	}
-	$: console.log(
-		'[Navbar] $isLoggedIn:',
-		$isLoggedIn,
-		'| $currentUser:',
-		$currentUser,
-		'| [Navbar] Rendered at',
-		new Date().toISOString()
-	);
 </script>
 
 <svelte:window on:click={handleClickOutside} />
@@ -66,7 +64,7 @@
 		<!-- Navigation Links (Desktop) -->
 		<div class="hidden items-center space-x-6 md:flex">
 			<a href="/about" class="hover:text-primary text-sm font-medium transition-colors"> About </a>
-			{#if $isLoggedIn}
+			{#if session}
 				<a href="/projects" class="hover:text-primary text-sm font-medium transition-colors">
 					Projects
 				</a>
@@ -88,7 +86,7 @@
 			<!-- Theme Toggle -->
 			<ThemeToggle />
 
-			{#if $isLoggedIn}
+			{#if session}
 				<!-- User Dropdown -->
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -100,8 +98,12 @@
 					<DropdownMenu.Content class="w-56" align="end">
 						<DropdownMenu.Label class="font-normal">
 							<div class="flex flex-col space-y-1">
-								<p class="text-sm leading-none font-medium">{$currentUser?.name}</p>
-								<p class="text-muted-foreground text-xs leading-none">{$currentUser?.email}</p>
+								<p class="text-sm leading-none font-medium">
+									{session.user?.user_metadata?.name ?? session.user?.email ?? 'User'}
+								</p>
+								<p class="text-muted-foreground text-xs leading-none">
+									{session.user?.email ?? ''}
+								</p>
 							</div>
 						</DropdownMenu.Label>
 						<DropdownMenu.Separator />
@@ -149,7 +151,7 @@
 							>
 								About
 							</a>
-							{#if $isLoggedIn}
+							{#if session}
 								<a
 									href="/projects"
 									class="hover:bg-accent hover:text-accent-foreground block px-3 py-2 text-sm"
@@ -181,7 +183,7 @@
 									Dashboard
 								</a>
 							{/if}
-							{#if !$isLoggedIn}
+							{#if !session}
 								<hr class="my-1" />
 								<button
 									class="hover:bg-accent hover:text-accent-foreground flex w-full items-center px-3 py-2 text-left text-sm"

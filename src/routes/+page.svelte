@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { currentUser, isLoggedIn } from '$lib/stores/auth.js';
+
+	let { data } = $props();
+	let { session } = $derived(data);
 
 	// --- Vars from Hero Animation (Component 1) ---
 	let mouseX = 0;
@@ -131,24 +133,26 @@
 	// Handle heroElement mouse move listener setup and cleanup
 	let currentMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
 
-	$: if (heroElement && typeof window !== 'undefined') {
-		// Clean up previous listener if it exists
-		if (currentMouseMoveHandler && heroElement) {
-			heroElement.removeEventListener('mousemove', currentMouseMoveHandler);
-		}
-
-		// Create new handler
-		currentMouseMoveHandler = (e: MouseEvent) => {
-			if (heroElement) {
-				const rect = heroElement.getBoundingClientRect();
-				mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-				mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+	$effect(() => {
+		if (heroElement && typeof window !== 'undefined') {
+			// Clean up previous listener if it exists
+			if (currentMouseMoveHandler && heroElement) {
+				heroElement.removeEventListener('mousemove', currentMouseMoveHandler);
 			}
-		};
 
-		// Add new listener
-		heroElement.addEventListener('mousemove', currentMouseMoveHandler);
-	}
+			// Create new handler
+			currentMouseMoveHandler = (e: MouseEvent) => {
+				if (heroElement) {
+					const rect = heroElement.getBoundingClientRect();
+					mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+					mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+				}
+			};
+
+			// Add new listener
+			heroElement.addEventListener('mousemove', currentMouseMoveHandler);
+		}
+	});
 
 	// Cleanup on component destroy
 	onDestroy(() => {
@@ -349,7 +353,7 @@
 					</h1>
 					<p class="saffron-subheadline">Cultivate Your Circuits</p>
 					<p class="saffron-tagline">The collaborative SPICE environment, beautifully executed.</p>
-					{#if $isLoggedIn}
+					{#if session}
 						<button
 							class="saffron-cta-button-main"
 							on:click={() => (window.location.href = '/dashboard')}

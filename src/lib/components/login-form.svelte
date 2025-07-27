@@ -5,15 +5,15 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
-
 	import { writable } from 'svelte/store';
 
 	export let form;
+	export let data;
 	let loading = writable(false);
 
 	const submitLogin: SubmitFunction = () => {
 		loading.set(true);
-		return async ({ update }) => {
+		return async ({ result, update }) => {
 			loading.set(false);
 			await update();
 		};
@@ -27,9 +27,9 @@
 	</Card.Header>
 	<Card.Content>
 		<form method="POST" use:enhance={submitLogin} class="grid gap-4">
-			{#if form?.error}
+			{#if form?.error || data?.error}
 				<div class="rounded bg-red-50 p-2 text-sm text-red-600 dark:bg-red-950 dark:text-red-400">
-					{form.error}
+					{form?.error || data?.error}
 				</div>
 			{/if}
 

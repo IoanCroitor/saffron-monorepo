@@ -38,6 +38,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
+	let session = $derived($page.data.session);
+	let user = $derived($page.data.user);
 	import {
 		initCollaboration,
 		hasEditRights,
@@ -577,7 +579,7 @@
 			}
 
 			// Generate bulletproof component ID
-			const userId = $page.data.session?.user?.id || 'anonymous';
+			const userId = session?.user?.id || 'anonymous';
 			const componentId = generateComponentId(componentType, userId);
 
 			// Add component with enhanced error handling

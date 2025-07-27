@@ -24,8 +24,13 @@
 	import { onMount } from 'svelte';
 	import { GoogleGenerativeAI } from '@google/generative-ai';
 	import {env}  from '$env/dynamic/public';
-	import { currentUser } from '$lib/stores/auth';
+	import { page } from '$app/stores';
 	import { circuitStore } from '../editor/stores/circuit-store';
+
+	let { data } = $props();
+	
+	// Get user from server-side data
+	const user = $derived(data.user);
 
 	// State management
 	let selectedImage: File | null = $state(null);
@@ -545,7 +550,7 @@ Only output the SPICE netlist. Do not include any explanations, headers, or addi
 		}
 
 		// Check if user is logged in
-		if (!$currentUser) {
+		if (!user) {
 			error = 'You must be logged in to save schematics.';
 			return;
 		}
@@ -561,7 +566,7 @@ Only output the SPICE netlist. Do not include any explanations, headers, or addi
 			const result = await circuitStore.saveCircuit(
 				schematicName,
 				schematicDescription || 'Converted from SPICE netlist via Circuit Scanner',
-				$currentUser.id
+				user.id
 			);
 			
 			if (result.success) {
