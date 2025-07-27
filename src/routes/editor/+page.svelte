@@ -88,6 +88,7 @@
 	let showSaveDialog = $state(false);
 	let showLoadDialog = $state(false);
 	let showCollaborationDialog = $state(false);
+	let showDebugMenu = $state(false);
 	let currentProjectId = $state<string | null>(null);
 	let currentProjectName = $state<string>('Untitled Circuit');
 	let hasUnsavedChanges = $state(false);
@@ -277,6 +278,10 @@
 			if (event.key === 'Escape') {
 				selectedWire = null;
 				selectedNode = null;
+			} else if (event.key === 'd' && !isInputField) {
+				// Toggle debug menu with 'D' key
+				event.preventDefault();
+				showDebugMenu = !showDebugMenu;
 			} else if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
 				// Only delete components if not typing in an input field
 				if (selectedWire) {
@@ -765,7 +770,7 @@
 <svelte:head>
 	<title>Circuit Simulator - Saffron</title>
 </svelte:head>
-<DebugNodeMenu />
+<DebugNodeMenu bind:isVisible={showDebugMenu} on:close={() => (showDebugMenu = false)} />
 <div class="bg-background flex h-[calc(100vh-4rem)] w-full flex-col overflow-hidden">
 	<!-- Toolbar -->
 	<div
