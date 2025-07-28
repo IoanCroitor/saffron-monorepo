@@ -29,6 +29,19 @@
 	const wireColor = $derived(data?.color || '#64748b'); // Default gray
 	const wireWidth = $derived(selected ? 3 : 2);
 
+	// Debug logging for wire data changes (only for selected wires to reduce noise)
+	$effect(() => {
+		if (selected) {
+			console.log('[WireEdge] Selected wire data:', {
+				id,
+				wireShape,
+				wireStyle,
+				wireColor,
+				data
+			});
+		}
+	});
+
 	// Generate path based on wire shape
 	const [edgePath, labelX, labelY] = $derived(
 		(() => {
@@ -63,37 +76,16 @@
 	);
 
 	// Generate stroke-dasharray based on wire style
-	const strokeDasharray = $derived(() => {
-		switch (wireStyle) {
-			case 'dashed':
-				return '8,4';
-			case 'dotted':
-				return '2,3';
-			case 'solid':
-			default:
-				return 'none';
-		}
-	});
-
-	// Animation for selected wires
-	const animationClass = $derived(selected ? 'wire-selected' : '');
+	const strokeDasharray = $derived(
+		wireStyle === 'dashed' ? '8,4' :
+		wireStyle === 'dotted' ? '2,3' : 'none'
+	);
 
 	// Interactive functions
 	function onEdgeClick() {
 		console.log('Wire clicked:', { id, wireShape, wireStyle, data });
-		// Dispatch event to parent for wire selection
-		const event = new CustomEvent('wireSelected', {
-			detail: {
-				id,
-				source,
-				target,
-				sourceHandle: restProps.sourceHandleId,
-				targetHandle: restProps.targetHandleId,
-				data,
-				type: 'wire'
-			}
-		});
-		document.dispatchEvent(event);
+		// Using SvelteFlow's built-in onedgeclick instead of custom event
+		// This prevents double selection handling that causes inconsistent state
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
@@ -104,15 +96,12 @@
 	}
 </script>
 
-<!-- Wire path with interactive styling -->
-<path
+<!-- Use BaseEdge with custom styling to prevent double rendering -->
+<BaseEdge
 	{id}
-	class="wire-path {animationClass}"
-	d={edgePath}
-	stroke={selected ? '#3b82f6' : wireColor}
-	stroke-width={wireWidth}
-	stroke-dasharray={strokeDasharray()}
-	fill="none"
+	path={edgePath}
+	style="stroke: {selected ? '#3b82f6' : wireColor}; stroke-width: {wireWidth}; stroke-dasharray: {strokeDasharray}; cursor: pointer; transition: stroke-width 0.15s ease;"
+	class={selected ? 'wire-selected' : ''}
 	onclick={onEdgeClick}
 	onkeydown={onKeyDown}
 	role="button"
@@ -136,18 +125,7 @@
 {/if}
 
 <style>
-	.wire-path {
-		cursor: pointer;
-		transition:
-			stroke-width 0.2s ease,
-			stroke 0.2s ease;
-	}
-
-	.wire-path:hover {
-		stroke-width: 3;
-	}
-
-	.wire-selected {
+	:global(.wire-selected) {
 		animation: wire-pulse 1.5s ease-in-out infinite;
 	}
 
@@ -164,9 +142,5 @@
 		50% {
 			opacity: 0.6;
 		}
-	}
-
-	:global(.svelte-flow__edge-path) {
-		transition: all 0.2s ease;
 	}
 </style>

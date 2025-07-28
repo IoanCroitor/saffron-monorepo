@@ -231,10 +231,7 @@
 	let collaboratorCount = $state(0);
 	let collaborationCleanupFn: (() => void) | null = null;
 
-	// Force refresh key for reactive updates
-	const flowKey = $derived(JSON.stringify(edges.map((e) => ({ id: e.id, data: e.data }))));
-
-	// Force refresh function to trigger wire updates
+	// Removed flowKey - no longer needed with improved reactivity
 	// Function to add component from sidebar
 	function addComponent(type: string, position: { x: number; y: number }) {
 		const componentId = generateComponentId(type, session?.user?.id || 'anonymous');
@@ -353,18 +350,39 @@
 
 	// Wire operations for WirePropertiesPanel
 	function updateWireStyle(edgeId: string, wireShape: string, wireStyle?: string, color?: string) {
+		console.log('[EDITOR] updateWireStyle called:', { edgeId, wireShape, wireStyle, color });
+		
 		const edgeIndex = edges.findIndex(edge => edge.id === edgeId);
 		if (edgeIndex !== -1) {
-			edges[edgeIndex] = {
-				...edges[edgeIndex],
+			const oldEdge = edges[edgeIndex];
+			console.log('[EDITOR] Found edge to update:', { oldData: oldEdge.data });
+			
+			// Create the updated edge with proper data merging
+			const updatedEdge = {
+				...oldEdge,
 				data: {
-					...edges[edgeIndex].data,
+					...oldEdge.data,
 					wireShape,
-					...(wireStyle && { wireStyle }),
-					...(color && { color })
+					...(wireStyle !== undefined && { wireStyle }),
+					...(color !== undefined && { color })
 				}
 			};
-			console.log('[EDITOR] Wire style updated:', { edgeId, wireShape, wireStyle, color });
+			
+			console.log('[EDITOR] Updated edge data:', { newData: updatedEdge.data });
+			
+			// Force reactivity by creating new edges array
+			edges = edges.map((edge, index) => 
+				index === edgeIndex ? updatedEdge : edge
+			);
+			
+			// Update selectedWire if it's the same edge
+			if (selectedWire?.id === edgeId) {
+				selectedWire = updatedEdge;
+			}
+			
+			console.log('[EDITOR] Wire style updated successfully');
+		} else {
+			console.warn('[EDITOR] Edge not found:', edgeId);
 		}
 	}
 
@@ -379,40 +397,18 @@
 		console.log('[EDITOR] Connection removed:', { edgeId });
 	}
 
-	function forceRefreshWires() {
-		// Create a new array reference to trigger reactivity
-		edges = [...edges];
-		// Also update the selected wire if it exists
-		if (selectedWire?.id) {
-			const updatedWire = edges.find((edge) => edge.id === selectedWire!.id);
-			if (updatedWire) {
-				selectedWire = { ...updatedWire };
-			}
-		}
-	}
+	// Removed forceRefreshWires function - no longer needed with improved reactivity
 
 	// Keep selected elements in sync with store changes
 	$effect(() => {
-		// Sync selected wire with store changes
-		if (selectedWire?.id) {
-			const updatedEdge = edges.find((edge) => edge.id === selectedWire!.id);
-			if (updatedEdge && JSON.stringify(updatedEdge) !== JSON.stringify(selectedWire)) {
-				selectedWire = { ...updatedEdge };
-			} else if (!updatedEdge) {
-				// Wire was deleted
-				selectedWire = null;
-			}
+		// Check if selected wire was deleted
+		if (selectedWire?.id && !edges.find((edge) => edge.id === selectedWire!.id)) {
+			selectedWire = null;
 		}
 
-		// Sync selected node with store changes
-		if (selectedNode?.id) {
-			const updatedNode = nodes.find((node) => node.id === selectedNode!.id);
-			if (updatedNode && JSON.stringify(updatedNode.data?.parameters) !== JSON.stringify(selectedNode.data?.parameters)) {
-				selectedNode = updatedNode;
-			} else if (!updatedNode) {
-				// Node was deleted
-				selectedNode = null;
-			}
+		// Check if selected node was deleted
+		if (selectedNode?.id && !nodes.find((node) => node.id === selectedNode!.id)) {
+			selectedNode = null;
 		}
 	});
 
@@ -420,19 +416,8 @@
 
 	// Listen for wire selection events
 	$effect(() => {
-		function handleWireSelection(event: Event) {
-			const customEvent = event as CustomEvent;
-			const wireData = customEvent.detail;
-			selectedWire = {
-				...wireData,
-				source: wireData.source,
-				target: wireData.target,
-				sourceHandle: wireData.sourceHandle,
-				targetHandle: wireData.targetHandle
-			};
-			selectedNode = null; // Clear node selection
-		}
-
+		// Removed wireSelected event listener - using SvelteFlow's onedgeclick instead
+		
 		// Keyboard shortcuts
 		function handleKeyDown(event: KeyboardEvent) {
 			// Check if the user is typing in an input field
@@ -485,11 +470,9 @@
 			}
 		}
 
-		document.addEventListener('wireSelected', handleWireSelection);
 		document.addEventListener('keydown', handleKeyDown);
 
 		return () => {
-			document.removeEventListener('wireSelected', handleWireSelection);
 			document.removeEventListener('keydown', handleKeyDown);
 		};
 	});
@@ -571,15 +554,23 @@
 	}
 
 	function onConnect(params: any) {
+		// Generate unique edge ID to prevent conflicts when connecting same nodes multiple times
+		const timestamp = Date.now();
 		const newEdge = {
-			id: `edge-${params.source}-${params.target}`,
+			id: `edge-${params.source}-${params.target}-${timestamp}`,
 			source: params.source,
 			target: params.target,
 			sourceHandle: params.sourceHandle,
 			targetHandle: params.targetHandle,
 			type: 'wire',
-			data: { color: '#64748b', wireShape: 'smoothstep', wireStyle: 'solid' }
+			data: { 
+				color: '#64748b', 
+				wireShape: 'smoothstep', 
+				wireStyle: 'solid' 
+			}
 		};
+
+		console.log('[EDITOR] Creating new wire connection:', newEdge);
 
 		// Add edge to local state
 		edges = [...edges, newEdge];
@@ -1209,7 +1200,6 @@
 	<WirePropertiesPanel 
 		bind:selectedWire 
 		bind:edges 
-		onRefresh={forceRefreshWires}
 		onUpdateWireStyle={updateWireStyle}
 		onRemoveConnection={removeConnection}
 	/>
@@ -1251,11 +1241,11 @@
 		color: hsl(var(--card-foreground));
 	}
 
-	:global(.svelte-flow .svelte-flow__edge) {
+	:global(.svelte-flow .svelte-flow__edge-path) {
 		stroke: hsl(var(--muted-foreground));
 	}
 
-	:global(.svelte-flow .svelte-flow__edge.selected) {
+	:global(.svelte-flow .svelte-flow__edge.selected .svelte-flow__edge-path) {
 		stroke: hsl(var(--primary));
 	}
 
