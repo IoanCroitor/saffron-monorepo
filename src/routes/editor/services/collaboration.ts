@@ -43,8 +43,7 @@ export interface CollaborationCallbacks {
 	onEdgeUpdate?: (edgeId: string, edgeData: any) => void;
 	onEdgeAdd?: (edgeId: string, edgeData: any) => void;
 	onEdgeRemove?: (edgeId: string) => void;
-	onCursorUpdate?: (cursorId: string, cursorData: any) => void;
-	onCursorRemove?: (cursorId: string) => void;
+	// Removed cursor callbacks - too complex
 }
 
 // Stores for collaboration state
@@ -64,7 +63,7 @@ let ydoc: Y.Doc | null = null;
 let provider: WebsocketProvider | null = null;
 let nodesMap: Y.Map<any> | null = null;
 let edgesMap: Y.Map<any> | null = null;
-let cursorsMap: Y.Map<any> | null = null;
+// Removed cursorsMap - too complex
 let currentProjectId: string | null = null;
 let currentUserId: string | null = null;
 let collaborationCallbacks: CollaborationCallbacks = {};
@@ -110,7 +109,7 @@ export async function initCollaboration(
 		// Get shared maps for nodes, edges, and cursors
 		nodesMap = ydoc.getMap('nodes');
 		edgesMap = ydoc.getMap('edges');
-		cursorsMap = ydoc.getMap('cursors');
+		// Removed cursorsMap initialization
 
 		// Create WebSocket provider to connect to your Yjs server
 		provider = new WebsocketProvider(
@@ -122,10 +121,7 @@ export async function initCollaboration(
 		// Set up event listeners
 		setupEventListeners();
 
-		// Set up cursor tracking
-		if (browser && window) {
-			setupCursorTracking();
-		}
+		// Removed cursor tracking
 
 		// Wait for connection to be established
 		return new Promise<(() => void) | null>((resolve) => {
@@ -159,20 +155,36 @@ export async function initCollaboration(
  * Set up event listeners for Yjs changes
  */
 function setupEventListeners() {
-	if (!nodesMap || !edgesMap || !cursorsMap) return;
+	if (!nodesMap || !edgesMap) return;
 
 	// Listen for node changes from other users only
 	nodesMap.observe((event) => {
+		console.log('[COLLABORATION] 🔍 Node observe event:', {
+			changesCount: event.changes.keys.size,
+			currentUserId,
+			event: event.changes.keys
+		});
+		
 		event.changes.keys.forEach((change, key) => {
 			const nodeData = nodesMap!.get(key);
+			console.log('[COLLABORATION] 🔍 Processing node change:', {
+				key,
+				action: change.action,
+				nodeData,
+				nodeDataUserId: nodeData?.userId,
+				currentUserId,
+				isFromOtherUser: nodeData && nodeData.userId !== currentUserId
+			});
 			
 			// Only process changes from other users
 			if (nodeData && nodeData.userId !== currentUserId) {
 				if (change.action === 'add' || change.action === 'update') {
 					// Update from another user
 					if (change.action === 'add' && collaborationCallbacks.onNodeAdd) {
+						console.log('[COLLABORATION] ✅ Calling onNodeAdd callback');
 						collaborationCallbacks.onNodeAdd(key, nodeData);
 					} else if (change.action === 'update' && collaborationCallbacks.onNodeUpdate) {
+						console.log('[COLLABORATION] ✅ Calling onNodeUpdate callback');
 						collaborationCallbacks.onNodeUpdate(key, nodeData);
 					}
 					console.log('[COLLABORATION] Node update from collaborator:', key, nodeData);
@@ -182,6 +194,8 @@ function setupEventListeners() {
 					}
 					console.log('[COLLABORATION] Component removed by collaborator:', key);
 				}
+			} else {
+				console.log('[COLLABORATION] ⏭️ Skipping change from self or invalid data');
 			}
 		});
 	});
@@ -211,38 +225,9 @@ function setupEventListeners() {
 		});
 	});
 
-	// Listen for cursor changes
-	cursorsMap.observe((event: any) => {
-		updateCollaboratorsFromCursors();
-	});
+	// Removed cursor tracking - too complex
 
 	// Provider connection changes are now handled in the initCollaboration promise
-}
-
-/**
- * Update collaborators from cursor data
- */
-function updateCollaboratorsFromCursors() {
-	if (!cursorsMap) return;
-
-	const collaborators: Record<string, UserCursor> = {};
-
-	cursorsMap.forEach((cursorData, userId) => {
-		if (userId !== currentUserId) {
-			collaborators[userId] = {
-				userId,
-				name: cursorData.name || 'Anonymous',
-				color: cursorData.color || getRandomColor(),
-				position: cursorData.position || { x: 0, y: 0 },
-				lastUpdated: new Date(cursorData.timestamp || Date.now()),
-				action: cursorData.action || 'idle',
-				nodeId: cursorData.nodeId,
-				selectedNodeIds: cursorData.selectedNodeIds
-			};
-		}
-	});
-
-	activeCollaborators.set(collaborators);
 }
 
 /**
@@ -251,17 +236,30 @@ function updateCollaboratorsFromCursors() {
  * @param position The new position
  */
 export function broadcastNodeMovement(nodeId: string, position: { x: number; y: number }) {
-	if (!nodesMap || !currentUserId) return;
+	console.log('[COLLABORATION] 🚀 broadcastNodeMovement called:', { nodeId, position, nodesMap: !!nodesMap, currentUserId });
+	
+	if (!nodesMap || !currentUserId) {
+		console.log('[COLLABORATION] ❌ Cannot broadcast - missing nodesMap or currentUserId');
+		return;
+	}
 
+	// Get existing node data to preserve properties
+	const existingData = nodesMap.get(nodeId);
+	console.log('[COLLABORATION] 📦 Existing node data:', existingData);
+	
 	// Use safe serialization to avoid Svelte proxy issues
 	const nodeData = safeSerialize({
 		id: nodeId,
 		position,
 		userId: currentUserId,
-		timestamp: Date.now()
+		timestamp: Date.now(),
+		// Preserve existing data/properties if available
+		...(existingData && { data: existingData.data })
 	});
 
+	console.log('[COLLABORATION] 📤 Setting node data in YJS:', nodeData);
 	nodesMap.set(nodeId, nodeData);
+	console.log('[COLLABORATION] ✅ Broadcasting node movement:', { nodeId, position });
 }
 
 /**
@@ -273,7 +271,8 @@ export function broadcastNodeMovement(nodeId: string, position: { x: number; y: 
 export function broadcastComponentAdded(
 	type: string,
 	position: { x: number; y: number },
-	id: string
+	id: string,
+	data?: any
 ) {
 	if (!nodesMap || !currentUserId) return;
 
@@ -282,11 +281,13 @@ export function broadcastComponentAdded(
 		id,
 		type,
 		position,
+		data,
 		userId: currentUserId,
 		timestamp: Date.now()
 	});
 
 	nodesMap.set(id, nodeData);
+	console.log('[COLLABORATION] Broadcasting component added:', { id, type, position, data });
 }
 
 /**
@@ -297,6 +298,38 @@ export function broadcastComponentRemoved(id: string) {
 	if (!nodesMap) return;
 
 	nodesMap.delete(id);
+}
+
+/**
+ * Broadcast node property updates
+ * @param nodeId The node ID
+ * @param data The updated node data/properties
+ */
+export function broadcastNodeProperties(nodeId: string, data: any) {
+	console.log('[COLLABORATION] 🚀 broadcastNodeProperties called:', { nodeId, data, nodesMap: !!nodesMap, currentUserId });
+	
+	if (!nodesMap || !currentUserId) {
+		console.log('[COLLABORATION] ❌ Cannot broadcast properties - missing nodesMap or currentUserId');
+		return;
+	}
+
+	// Get existing node data
+	const existingData = nodesMap.get(nodeId);
+	console.log('[COLLABORATION] 📦 Existing node data for properties:', existingData);
+	
+	// Use safe serialization to avoid Svelte proxy issues
+	const nodeData = safeSerialize({
+		id: nodeId,
+		data,
+		userId: currentUserId,
+		timestamp: Date.now(),
+		// Preserve existing position if available
+		...(existingData && { position: existingData.position })
+	});
+
+	console.log('[COLLABORATION] 📤 Setting node properties in YJS:', nodeData);
+	nodesMap.set(nodeId, nodeData);
+	console.log('[COLLABORATION] ✅ Broadcasting node properties:', { nodeId, data });
 }
 
 /**
@@ -338,70 +371,7 @@ export function broadcastConnectionRemoved(edgeId: string) {
  * @param action The current action being performed
  * @param nodeId Optional node ID if interacting with a specific node
  */
-export function updateCursorPosition(
-	position: { x: number; y: number },
-	action: 'idle' | 'dragging' | 'selecting' | 'drawing' = 'idle',
-	nodeId?: string
-) {
-	if (!cursorsMap || !currentUserId) return;
-
-	// Throttle cursor updates
-	if (cursorUpdateTimeout) {
-		clearTimeout(cursorUpdateTimeout);
-	}
-
-	cursorUpdateTimeout = setTimeout(() => {
-		const userInfo = get(userCollabInfo);
-
-		// Use safe serialization to avoid Svelte proxy issues
-		const cursorData = safeSerialize({
-			position,
-			action,
-			nodeId,
-			name: userInfo.name,
-			color: userInfo.color,
-			timestamp: Date.now()
-		});
-
-		cursorsMap!.set(currentUserId!, cursorData);
-	}, CURSOR_DEBOUNCE_TIME);
-}
-
-/**
- * Update cursor action without changing position
- * @param action The current action being performed
- * @param nodeId Optional node ID if interacting with a specific node
- */
-export function updateCursorAction(
-	action: 'idle' | 'dragging' | 'selecting' | 'drawing',
-	nodeId?: string
-) {
-	if (!cursorsMap || !currentUserId) return;
-
-	const currentCursor = cursorsMap.get(currentUserId) || {};
-	const userInfo = get(userCollabInfo);
-
-	// Use safe serialization to avoid Svelte proxy issues
-	const cursorData = safeSerialize({
-		...currentCursor,
-		action,
-		nodeId,
-		name: userInfo.name,
-		color: userInfo.color,
-		timestamp: Date.now()
-	});
-
-	cursorsMap.set(currentUserId, cursorData);
-}
-
-/**
- * Set up cursor tracking with mouse events
- * This function is now deprecated - cursor tracking should be done in the editor
- * using SvelteFlow's coordinate system
- */
-function setupCursorTracking() {
-	console.warn('[COLLABORATION] setupCursorTracking is deprecated - use SvelteFlow coordinates instead');
-}
+// Removed cursor functions - too complex
 
 /**
  * Generate a unique user ID
@@ -439,7 +409,7 @@ export async function cleanupCollaboration() {
 
 	nodesMap = null;
 	edgesMap = null;
-	cursorsMap = null;
+	// Removed cursorsMap
 	currentProjectId = null;
 	currentUserId = null;
 
@@ -506,12 +476,12 @@ export const collaboration = {
 	init: initCollaboration,
 	cleanup: cleanupCollaboration,
 	broadcastNodeMovement,
+	broadcastNodeProperties,
 	broadcastComponentAdded,
 	broadcastComponentRemoved,
 	broadcastConnectionAdded,
 	broadcastConnectionRemoved,
-	updateCursorPosition,
-	updateCursorAction,
+	// Removed cursor functions
 	generateComponentId,
 	hasEditRights
 };

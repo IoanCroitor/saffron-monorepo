@@ -3,7 +3,7 @@
  * Run this in the browser console to test the collaboration service
  */
 
-import { initCollaboration, cleanupCollaboration, broadcastNodeMovement, broadcastComponentAdded, syncStateToYjs } from './collaboration';
+import { initCollaboration, cleanupCollaboration, broadcastNodeMovement, broadcastComponentAdded, broadcastNodeProperties } from './collaboration';
 
 export async function testYjsCollaboration() {
 	console.log('🧪 Testing Yjs Collaboration Service...');
@@ -53,17 +53,15 @@ export async function testYjsCollaboration() {
 		broadcastComponentAdded('resistor', { x: 150, y: 250 }, 'test-resistor');
 		console.log('✅ Component addition broadcasted');
 
-		// Test 4: Test state sync to YJS
-		console.log('4. Testing state sync to YJS...');
-		const testNodes = [
-			{ id: 'test-node-1', type: 'resistor', position: { x: 100, y: 100 }, data: { label: 'R1' } },
-			{ id: 'test-node-2', type: 'capacitor', position: { x: 200, y: 200 }, data: { label: 'C1' } }
-		];
-		const testEdges = [
-			{ id: 'test-edge-1', source: 'test-node-1', target: 'test-node-2', type: 'wire', data: {} }
-		];
-		syncStateToYjs(testNodes, testEdges);
-		console.log('✅ State sync to YJS completed');
+		// Test 4: Test node properties broadcasting
+		console.log('4. Testing node properties broadcasting...');
+		broadcastNodeProperties('test-node', { 
+			parameters: { 
+				resistance: '2k', 
+				tolerance: '5%' 
+			} 
+		});
+		console.log('✅ Node properties broadcasted');
 
 		// Test 5: Wait a bit and check callbacks
 		setTimeout(async () => {
