@@ -33,6 +33,7 @@
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
+	import SaveIndicator from './components/SaveIndicator.svelte';
 	import { settingsStore } from './stores/settings-store';
 	import { circuitAPI } from './services/circuit-api';
 	import { page } from '$app/stores';
@@ -209,7 +210,7 @@
 			clearTimeout(autoSaveTimeout);
 			autoSaveTimeout = setTimeout(async () => {
 				await performAutoSave();
-			}, 2000); // Auto-save after 2 seconds of inactivity
+			}, 10000); // Auto-save after 10 seconds of inactivity
 		}
 	});
 
@@ -218,8 +219,14 @@
 		
 		isAutoSaving = true;
 		try {
+			// Add a small delay to allow the progress animation to start
+			await new Promise(resolve => setTimeout(resolve, 50));
+			
 			const success = await circuitAPI.autoSave(currentProjectId, nodes, edges);
 			if (success) {
+				// Ensure minimum animation time for better UX
+				await new Promise(resolve => setTimeout(resolve, 500));
+				
 				hasUnsavedChanges = false;
 				// Update initial state to current state since it's now saved
 				initialNodes = JSON.parse(JSON.stringify(nodes));
@@ -1187,21 +1194,25 @@
 								{#if collaboratorCount > 0}
 									· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
 								{/if}
-															{#if isSaving}
-								<span class="text-chart-3 ml-1">· Saving...</span>
-							{:else if isAutoSaving}
-								<span class="text-chart-3 ml-1">· Saving...</span>
-							{:else if hasUnsavedChanges}
-								<span class="text-chart-3 ml-1">· Unsaved changes</span>
-							{/if}
+							</span>
+							<span class="ml-2">
+								<SaveIndicator 
+									{hasUnsavedChanges}
+									{isAutoSaving}
+									compact={true}
+									alwaysVisible={true}
+								/>
 							</span>
 						</div>
-					{:else}
-						<div class="text-muted-foreground">
-							{currentProjectName}
-							{#if hasUnsavedChanges}
-								<span class="text-chart-3 ml-1">· Unsaved changes</span>
-							{/if}
+					{:else if nodes.length > 0 || edges.length > 0}
+						<!-- Non-collaborative save indicator -->
+						<div class="flex items-center justify-center">
+							<SaveIndicator 
+								{hasUnsavedChanges}
+								{isAutoSaving}
+								compact={false}
+								alwaysVisible={true}
+							/>
 						</div>
 					{/if}
 				</Panel>
@@ -1221,6 +1232,8 @@
 					<CollaborativeCursors />
 				{/if}
 			</SvelteFlow>
+
+
 		</div>
 
 		<!-- Right Sidebar - Properties & Analysis -->
