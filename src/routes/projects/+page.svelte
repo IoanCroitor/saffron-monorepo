@@ -28,7 +28,7 @@
 	}
 	
 	function handleEditProject(projectId: string) {
-		goto(`/editor?project=${projectId}`);
+		goto(`/editor?id=${projectId}`);
 	}
 </script>
 

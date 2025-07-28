@@ -33,6 +33,7 @@
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
+	import SaveIndicator from './components/SaveIndicator.svelte';
 	import { settingsStore } from './stores/settings-store';
 	import { circuitAPI } from './services/circuit-api';
 	import { page } from '$app/stores';
@@ -168,18 +169,37 @@
 	let isDragging = $state(false);
 	let hasUnsavedChanges = $state(false);
 	let isAutoSaving = $state(false);
+	let isLoadingProject = $state(false);
+
+	// Track the initial state to detect actual changes
+	let initialNodes: Node[] = [];
+	let initialEdges: Edge[] = [];
 
 	// Track changes for auto-save
 	$effect(() => {
-		// Mark as having changes whenever nodes or edges change
-		if (nodes.length > 0 || edges.length > 0) {
+		// Don't mark as unsaved if we're currently loading a project
+		if (isLoadingProject) return;
+		
+		// Don't mark as unsaved for empty circuits
+		if (nodes.length === 0 && edges.length === 0) {
+			hasUnsavedChanges = false;
+			return;
+		}
+		
+		// Check if current state differs from initial state
+		const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(initialNodes);
+		const edgesChanged = JSON.stringify(edges) !== JSON.stringify(initialEdges);
+		
+		if (nodesChanged || edgesChanged) {
 			hasUnsavedChanges = true;
 		}
 		
 		console.log('[EDITOR] Circuit state:', {
 			nodes: nodes.length,
 			edges: edges.length,
-			hasUnsavedChanges
+			hasUnsavedChanges,
+			nodesChanged,
+			edgesChanged
 		});
 	});
 
@@ -190,7 +210,7 @@
 			clearTimeout(autoSaveTimeout);
 			autoSaveTimeout = setTimeout(async () => {
 				await performAutoSave();
-			}, 2000); // Auto-save after 2 seconds of inactivity
+			}, 10000); // Auto-save after 10 seconds of inactivity
 		}
 	});
 
@@ -199,9 +219,18 @@
 		
 		isAutoSaving = true;
 		try {
+			// Add a small delay to allow the progress animation to start
+			await new Promise(resolve => setTimeout(resolve, 50));
+			
 			const success = await circuitAPI.autoSave(currentProjectId, nodes, edges);
 			if (success) {
+				// Ensure minimum animation time for better UX
+				await new Promise(resolve => setTimeout(resolve, 500));
+				
 				hasUnsavedChanges = false;
+				// Update initial state to current state since it's now saved
+				initialNodes = JSON.parse(JSON.stringify(nodes));
+				initialEdges = JSON.parse(JSON.stringify(edges));
 				console.log('[EDITOR] Auto-saved successfully');
 			}
 		} catch (error) {
@@ -266,6 +295,11 @@
 		
 		nodes = [];
 		edges = [];
+		
+		// Reset initial state
+		initialNodes = [];
+		initialEdges = [];
+		
 		selectedNode = null;
 		selectedWire = null;
 		hasUnsavedChanges = false;
@@ -514,7 +548,7 @@
 	onMount(() => {
 		// Check if we have a project ID in the URL
 		const urlParams = new URLSearchParams(window.location.search);
-		const projectId = urlParams.get('project');
+		const projectId = urlParams.get('id');
 
 		if (projectId) {
 			// Load the project
@@ -880,11 +914,17 @@
 
 	async function loadProject(projectId: string) {
 		try {
+			isLoadingProject = true;
+			
 			const result = await circuitAPI.loadCircuit(projectId);
 			if (result.success) {
 				// Load circuit data into local state
 				nodes = result.nodes || [];
 				edges = result.edges || [];
+				
+				// Set initial state for change tracking
+				initialNodes = JSON.parse(JSON.stringify(nodes));
+				initialEdges = JSON.parse(JSON.stringify(edges));
 				
 				currentProjectId = projectId;
 				currentProjectName = result.name || 'Untitled Circuit';
@@ -899,7 +939,7 @@
 
 				// Update URL with project ID
 				const url = new URL(window.location.toString());
-				url.searchParams.set('project', projectId);
+				url.searchParams.set('id', projectId);
 				history.replaceState({}, '', url.toString());
 			} else {
 				alert(`Failed to load project: ${result.error}`);
@@ -907,6 +947,8 @@
 		} catch (error) {
 			console.error('Error loading project:', error);
 			alert('Failed to load the project. Please try again.');
+		} finally {
+			isLoadingProject = false;
 		}
 	}
 
@@ -915,6 +957,11 @@
 		currentProjectId = projectId;
 		currentProjectName = name;
 		hasUnsavedChanges = false;
+		
+		// Update initial state to current state since it's now saved
+		initialNodes = JSON.parse(JSON.stringify(nodes));
+		initialEdges = JSON.parse(JSON.stringify(edges));
+		
 		showSaveDialog = false;
 
 		// Update URL with project ID
@@ -1147,21 +1194,25 @@
 								{#if collaboratorCount > 0}
 									· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
 								{/if}
-															{#if isSaving}
-								<span class="text-chart-3 ml-1">· Saving...</span>
-							{:else if isAutoSaving}
-								<span class="text-chart-3 ml-1">· Saving...</span>
-							{:else if hasUnsavedChanges}
-								<span class="text-chart-3 ml-1">· Unsaved changes</span>
-							{/if}
+							</span>
+							<span class="ml-2">
+								<SaveIndicator 
+									{hasUnsavedChanges}
+									{isAutoSaving}
+									compact={true}
+									alwaysVisible={true}
+								/>
 							</span>
 						</div>
-					{:else}
-						<div class="text-muted-foreground">
-							{currentProjectName}
-							{#if hasUnsavedChanges}
-								<span class="text-chart-3 ml-1">· Unsaved changes</span>
-							{/if}
+					{:else if nodes.length > 0 || edges.length > 0}
+						<!-- Non-collaborative save indicator -->
+						<div class="flex items-center justify-center">
+							<SaveIndicator 
+								{hasUnsavedChanges}
+								{isAutoSaving}
+								compact={false}
+								alwaysVisible={true}
+							/>
 						</div>
 					{/if}
 				</Panel>
@@ -1181,6 +1232,8 @@
 					<CollaborativeCursors />
 				{/if}
 			</SvelteFlow>
+
+
 		</div>
 
 		<!-- Right Sidebar - Properties & Analysis -->

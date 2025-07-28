@@ -15,7 +15,7 @@
 	}
 	
 	function handleEdit() {
-		goto(`/editor?project=${data.project.id}`);
+		goto(`/editor?id=${data.project.id}`);
 	}
 	
 	function handleShare() {

@@ -48,7 +48,7 @@
 	}
 	
 	async function copyJoinLink() {
-		const url = `${window.location.origin}/editor?project=${projectId}`;
+		const url = `${window.location.origin}/editor?id=${projectId}`;
 		try {
 			await navigator.clipboard.writeText(url);
 			copySuccess = true;
@@ -150,7 +150,7 @@
 						<label class="text-sm font-medium">Share Link</label>
 						<div class="flex items-center gap-2">
 							<Input
-								value="{window.location.origin}/editor?project={projectId}"
+								value="{window.location.origin}/editor?id={projectId}"
 								readonly
 								class="text-sm"
 							/>
