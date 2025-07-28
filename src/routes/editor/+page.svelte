@@ -168,18 +168,37 @@
 	let isDragging = $state(false);
 	let hasUnsavedChanges = $state(false);
 	let isAutoSaving = $state(false);
+	let isLoadingProject = $state(false);
+
+	// Track the initial state to detect actual changes
+	let initialNodes: Node[] = [];
+	let initialEdges: Edge[] = [];
 
 	// Track changes for auto-save
 	$effect(() => {
-		// Mark as having changes whenever nodes or edges change
-		if (nodes.length > 0 || edges.length > 0) {
+		// Don't mark as unsaved if we're currently loading a project
+		if (isLoadingProject) return;
+		
+		// Don't mark as unsaved for empty circuits
+		if (nodes.length === 0 && edges.length === 0) {
+			hasUnsavedChanges = false;
+			return;
+		}
+		
+		// Check if current state differs from initial state
+		const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(initialNodes);
+		const edgesChanged = JSON.stringify(edges) !== JSON.stringify(initialEdges);
+		
+		if (nodesChanged || edgesChanged) {
 			hasUnsavedChanges = true;
 		}
 		
 		console.log('[EDITOR] Circuit state:', {
 			nodes: nodes.length,
 			edges: edges.length,
-			hasUnsavedChanges
+			hasUnsavedChanges,
+			nodesChanged,
+			edgesChanged
 		});
 	});
 
@@ -202,6 +221,9 @@
 			const success = await circuitAPI.autoSave(currentProjectId, nodes, edges);
 			if (success) {
 				hasUnsavedChanges = false;
+				// Update initial state to current state since it's now saved
+				initialNodes = JSON.parse(JSON.stringify(nodes));
+				initialEdges = JSON.parse(JSON.stringify(edges));
 				console.log('[EDITOR] Auto-saved successfully');
 			}
 		} catch (error) {
@@ -266,6 +288,11 @@
 		
 		nodes = [];
 		edges = [];
+		
+		// Reset initial state
+		initialNodes = [];
+		initialEdges = [];
+		
 		selectedNode = null;
 		selectedWire = null;
 		hasUnsavedChanges = false;
@@ -880,11 +907,17 @@
 
 	async function loadProject(projectId: string) {
 		try {
+			isLoadingProject = true;
+			
 			const result = await circuitAPI.loadCircuit(projectId);
 			if (result.success) {
 				// Load circuit data into local state
 				nodes = result.nodes || [];
 				edges = result.edges || [];
+				
+				// Set initial state for change tracking
+				initialNodes = JSON.parse(JSON.stringify(nodes));
+				initialEdges = JSON.parse(JSON.stringify(edges));
 				
 				currentProjectId = projectId;
 				currentProjectName = result.name || 'Untitled Circuit';
@@ -907,6 +940,8 @@
 		} catch (error) {
 			console.error('Error loading project:', error);
 			alert('Failed to load the project. Please try again.');
+		} finally {
+			isLoadingProject = false;
 		}
 	}
 
@@ -915,6 +950,11 @@
 		currentProjectId = projectId;
 		currentProjectName = name;
 		hasUnsavedChanges = false;
+		
+		// Update initial state to current state since it's now saved
+		initialNodes = JSON.parse(JSON.stringify(nodes));
+		initialEdges = JSON.parse(JSON.stringify(edges));
+		
 		showSaveDialog = false;
 
 		// Update URL with project ID
