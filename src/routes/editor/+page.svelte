@@ -29,6 +29,7 @@
 	import VoltmeterNode from './components/nodes/VoltmeterNode.svelte';
 	import AmmeterNode from './components/nodes/AmmeterNode.svelte';
 	import ProbeNode from './components/nodes/ProbeNode.svelte';
+	// Removed CursorNode import
 	import WireEdge from './components/edges/WireEdge.svelte';
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
@@ -39,20 +40,22 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	let session = $derived($page.data.session);
 	let user = $derived($page.data.user);
 	import {
 		initCollaboration,
-		hasEditRights,
 		broadcastNodeMovement,
-		updateCursorAction,
+		broadcastNodeProperties,
+			// Removed cursor functions
 		broadcastComponentAdded,
 		broadcastComponentRemoved,
 		broadcastConnectionAdded,
 		broadcastConnectionRemoved,
+		broadcastEdgeProperties,
 		generateComponentId
 	} from './services/collaboration';
-	import CollaborativeCursors from './components/CollaborativeCursors.svelte';
+	// Removed CollaborativeCursors - now using SvelteFlow cursor nodes
 
 	import '@xyflow/svelte/dist/style.css';
 
@@ -156,7 +159,8 @@
 		opamp: OpAmpNode,
 		voltmeter: VoltmeterNode,
 		ammeter: AmmeterNode,
-		probe: ProbeNode
+		probe: ProbeNode,
+		// Removed cursor node
 	};
 
 	const edgeTypes: EdgeTypes = {
@@ -282,7 +286,7 @@
 
 		// Broadcast to collaborators if in collaborative mode
 		if (isCollaborative && !isReadOnlyMode) {
-			broadcastComponentAdded(type, position, componentId);
+			broadcastComponentAdded(type, position, componentId, newNode.data);
 		}
 	}
 
@@ -308,6 +312,8 @@
 
 	// Component operations for PropertiesSidebar
 	function updateComponent(id: string, parameters: any) {
+		console.log('[EDITOR] 🚀 updateComponent called:', { id, parameters, isCollaborative, isReadOnlyMode });
+		
 		const nodeIndex = nodes.findIndex(node => node.id === id);
 		if (nodeIndex !== -1) {
 			nodes[nodeIndex] = {
@@ -317,21 +323,54 @@
 					parameters
 				}
 			};
-			console.log('[EDITOR] Component updated:', { id, parameters });
+			console.log('[EDITOR] ✅ Component updated locally:', { id, parameters });
+			
+			// Broadcast property update to collaborators
+			if (isCollaborative && !isReadOnlyMode) {
+				console.log('[EDITOR] 📤 Broadcasting property update to collaborators');
+				broadcastNodeProperties(id, { parameters });
+			} else {
+				console.log('[EDITOR] ⏭️ Not broadcasting - not collaborative or read-only');
+			}
+		} else {
+			console.log('[EDITOR] ❌ Node not found for update:', id);
 		}
 	}
 
 	function removeComponent(id: string) {
+		console.log('[EDITOR] 🚀 removeComponent called:', { id, isCollaborative, isReadOnlyMode });
+		
+		// Clear selection if this node is selected
+		if (selectedNode?.id === id) {
+			selectedNode = null;
+			console.log('[EDITOR] ✅ Cleared selected node');
+		}
+		
+		// Find connected edges before removing them
+		const connectedEdges = edges.filter(edge => edge.source === id || edge.target === id);
+		console.log('[EDITOR] 🔍 Found connected edges to remove:', connectedEdges.map(e => e.id));
+		
 		// Remove node and connected edges
 		nodes = nodes.filter(node => node.id !== id);
 		edges = edges.filter(edge => edge.source !== id && edge.target !== id);
 		
+		console.log('[EDITOR] ✅ Removed node and connected edges locally');
+		
 		// Broadcast component removal to collaborators
 		if (isCollaborative && !isReadOnlyMode) {
+			console.log('[EDITOR] 📤 Broadcasting component removal to collaborators');
 			broadcastComponentRemoved(id);
+			
+			// Also broadcast removal of connected edges
+			connectedEdges.forEach(edge => {
+				console.log('[EDITOR] 📤 Broadcasting connected edge removal:', edge.id);
+				broadcastConnectionRemoved(edge.id);
+			});
+		} else {
+			console.log('[EDITOR] ⏭️ Not broadcasting - not collaborative or read-only');
 		}
 		
-		console.log('[EDITOR] Component removed:', { id });
+		console.log('[EDITOR] ✅ Component removal complete:', { id });
 	}
 
 	// Export functions for PropertiesSidebar
@@ -414,6 +453,14 @@
 				selectedWire = updatedEdge;
 			}
 			
+			// Broadcast edge property update to collaborators
+			if (isCollaborative && !isReadOnlyMode) {
+				console.log('[EDITOR] 📤 Broadcasting edge properties to collaborators');
+				broadcastEdgeProperties(edgeId, updatedEdge.data);
+			} else {
+				console.log('[EDITOR] ⏭️ Not broadcasting edge properties - not collaborative or read-only');
+			}
+			
 			console.log('[EDITOR] Wire style updated successfully');
 		} else {
 			console.warn('[EDITOR] Edge not found:', edgeId);
@@ -473,21 +520,14 @@
 			} else if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
 				// Only delete components if not typing in an input field
 				if (selectedWire) {
-					// Remove edge from local state
-					edges = edges.filter(edge => edge.id !== selectedWire!.id);
+					console.log('[EDITOR] 🗑️ Keyboard deletion of wire:', selectedWire.id);
+					// Use the centralized removeConnection function for consistency
+					removeConnection(selectedWire.id);
 					selectedWire = null;
 				} else if (selectedNode) {
-					const nodeId = selectedNode.id;
-					// Remove node and connected edges from local state
-					nodes = nodes.filter(node => node.id !== nodeId);
-					edges = edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
-
-					// Broadcast component removal to collaborators
-					if (isCollaborative && !isReadOnlyMode) {
-						broadcastComponentRemoved(nodeId);
-					}
-
-					selectedNode = null;
+					console.log('[EDITOR] 🗑️ Keyboard deletion of node:', selectedNode.id);
+					// Use the centralized removeComponent function for consistency
+					removeComponent(selectedNode.id);
 				}
 			} else if (event.ctrlKey || event.metaKey) {
 				// Handle Ctrl/Cmd shortcuts
@@ -511,6 +551,30 @@
 		};
 	});
 
+	// Add test functions to global scope for debugging
+	if (browser) {
+		(window as any).testDeletion = async () => {
+			console.log('🧪 Testing deletion from editor...');
+			if (nodes.length > 0) {
+				const firstNode = nodes[0];
+				console.log('🗑️ Deleting first node:', firstNode.id);
+				removeComponent(firstNode.id);
+			} else {
+				console.log('❌ No nodes to delete');
+			}
+		};
+		
+		(window as any).testCollaboration = async () => {
+			console.log('🧪 Testing collaboration...');
+			console.log('Current state:', {
+				isCollaborative,
+				isReadOnlyMode,
+				nodesCount: nodes.length,
+				edgesCount: edges.length
+			});
+		};
+	}
+
 	// Initialize collaboration when project ID is available
 	$effect(() => {
 		if (currentProjectId) {
@@ -518,16 +582,175 @@
 
 			// Initialize real-time collaboration asynchronously
 			(async () => {
-				// Check for edit permissions
-				const canEdit = await hasEditRights(currentProjectId);
-				isReadOnlyMode = !canEdit;
+				// Since we're using direct YJS collaboration, everyone has edit rights
+				isReadOnlyMode = false;
 
-				// Initialize real-time collaboration
+				// Initialize real-time collaboration with callbacks
 				if (collaborationCleanupFn) {
 					collaborationCleanupFn();
 				}
 
-				collaborationCleanupFn = (await initCollaboration(currentProjectId)) || null;
+				// Define collaboration callbacks for handling updates from other users
+				const collaborationCallbacks = {
+					onNodeUpdate: (nodeId: string, nodeData: any) => {
+						console.log('[EDITOR] 🎯 onNodeUpdate callback called:', { nodeId, nodeData });
+						
+						// Update node from collaborator (position and data/properties)
+						const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+						console.log('[EDITOR] 🔍 Found node at index:', nodeIndex);
+						
+						if (nodeIndex !== -1) {
+							const updatedNode = { ...nodes[nodeIndex] };
+							console.log('[EDITOR] 📦 Original node:', updatedNode);
+							
+							// Update position if provided
+							if (nodeData.position) {
+								updatedNode.position = nodeData.position;
+								console.log('[EDITOR] 📍 Updated position:', nodeData.position);
+							}
+							
+							// Update data/properties if provided
+							if (nodeData.data) {
+								updatedNode.data = { ...updatedNode.data, ...nodeData.data };
+								console.log('[EDITOR] 🔧 Updated data:', nodeData.data);
+							}
+							
+							nodes[nodeIndex] = updatedNode;
+							nodes = [...nodes]; // Trigger reactivity
+							
+							console.log('[EDITOR] ✅ Node updated from collaborator:', { nodeId, updates: nodeData });
+						} else {
+							console.log('[EDITOR] ❌ Node not found:', nodeId);
+						}
+					},
+					onNodeAdd: (nodeId: string, nodeData: any) => {
+						// Add node from collaborator
+						const newNode = {
+							id: nodeId,
+							type: nodeData.type,
+							position: nodeData.position,
+							data: nodeData.data
+						};
+						nodes = [...nodes, newNode];
+					},
+					onNodeRemove: (nodeId: string) => {
+						console.log('[EDITOR] 🎯 onNodeRemove callback called:', { nodeId });
+						
+						try {
+							// Clear selection if this node is selected
+							if (selectedNode?.id === nodeId) {
+								selectedNode = null;
+								console.log('[EDITOR] ✅ Cleared selected node from collaborator removal');
+							}
+							
+							// Remove node and connected edges from collaborator
+							const beforeNodes = nodes.length;
+							const beforeEdges = edges.length;
+							
+							nodes = nodes.filter(n => n.id !== nodeId);
+							edges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+							
+							const afterNodes = nodes.length;
+							const afterEdges = edges.length;
+							
+							console.log('[EDITOR] ✅ Node removed from collaborator:', { 
+								nodeId, 
+								nodesRemoved: beforeNodes - afterNodes,
+								edgesRemoved: beforeEdges - afterEdges
+							});
+						} catch (error) {
+							console.error('[EDITOR] ❌ Error in onNodeRemove callback:', error);
+						}
+					},
+					onEdgeAdd: (edgeId: string, edgeData: any) => {
+						// Add edge from collaborator
+						const newEdge = {
+							id: edgeId,
+							source: edgeData.source,
+							target: edgeData.target,
+							sourceHandle: edgeData.sourceHandle,
+							targetHandle: edgeData.targetHandle,
+							type: 'wire',
+							data: edgeData.data
+						};
+						edges = [...edges, newEdge];
+					},
+					onEdgeUpdate: (edgeId: string, edgeData: any) => {
+						console.log('[EDITOR] 🎯 onEdgeUpdate callback called:', { edgeId, edgeData });
+						
+						// Update edge from collaborator
+						const edgeIndex = edges.findIndex(e => e.id === edgeId);
+						if (edgeIndex !== -1) {
+							const oldData = edges[edgeIndex].data || {};
+							console.log('[EDITOR] 📦 Old edge data:', oldData);
+							console.log('[EDITOR] 📦 New edge data to merge:', edgeData);
+							
+							const updatedEdge = {
+								...edges[edgeIndex],
+								data: { ...oldData, ...edgeData }
+							};
+							
+							console.log('[EDITOR] 📦 Updated edge data:', updatedEdge.data);
+							
+							edges[edgeIndex] = updatedEdge;
+							edges = [...edges]; // Trigger reactivity
+							
+							// Update selectedWire if it's the same edge
+							if (selectedWire?.id === edgeId) {
+								selectedWire = updatedEdge;
+							}
+							
+							console.log('[EDITOR] ✅ Edge updated from collaborator:', { edgeId, updates: edgeData });
+						} else {
+							console.log('[EDITOR] ❌ Edge not found:', edgeId);
+						}
+					},
+					onEdgeRemove: (edgeId: string) => {
+						console.log('[EDITOR] 🎯 onEdgeRemove callback called:', { edgeId });
+						
+						try {
+							// Clear selection if this edge is selected
+							if (selectedWire?.id === edgeId) {
+								selectedWire = null;
+								console.log('[EDITOR] ✅ Cleared selected wire from collaborator removal');
+							}
+							
+							// Remove edge from collaborator
+							const beforeEdges = edges.length;
+							edges = edges.filter(e => e.id !== edgeId);
+							const afterEdges = edges.length;
+							
+							console.log('[EDITOR] ✅ Edge removed from collaborator:', { 
+								edgeId, 
+								edgesRemoved: beforeEdges - afterEdges
+							});
+						} catch (error) {
+							console.error('[EDITOR] ❌ Error in onEdgeRemove callback:', error);
+						}
+					},
+					// No onStateLoad - we don't want YJS to override database state
+					// Removed cursor callbacks - too complex
+				};
+
+				console.log('[EDITOR] 🚀 Calling initCollaboration with:', {
+					projectId: currentProjectId,
+					userId: session?.user?.id,
+					email: session?.user?.email,
+					callbacks: Object.keys(collaborationCallbacks)
+				});
+				
+				const cleanupFn = await initCollaboration(
+					currentProjectId, 
+					session?.user?.id, 
+					session?.user?.email,
+					collaborationCallbacks
+				);
+				collaborationCleanupFn = cleanupFn || null;
+				
+				console.log('[EDITOR] ✅ Collaboration initialized, cleanup function:', !!cleanupFn);
+
+				// YJS will only handle real-time changes from this point forward
+				// No need to sync database state to YJS
 			})();
 		} else {
 			// Disable collaboration when no project is loaded
@@ -562,6 +785,25 @@
 				saveChanges();
 			}
 		}, 10000); // Auto-save every 10 seconds if changes
+
+		// Expose collaboration functions globally for debugging (browser only)
+		if (typeof window !== 'undefined') {
+			(window as any).broadcastNodeMovement = broadcastNodeMovement;
+			(window as any).broadcastNodeProperties = broadcastNodeProperties;
+			(window as any).broadcastComponentAdded = broadcastComponentAdded;
+			(window as any).isCollaborative = isCollaborative;
+			(window as any).isReadOnlyMode = isReadOnlyMode;
+			(window as any).currentUserId = session?.user?.id;
+			
+			// Debug script loaded in browser only
+			console.log('[EDITOR] Collaboration functions exposed for debugging');
+			console.log('[EDITOR] Collaboration state:', { 
+				isCollaborative, 
+				isReadOnlyMode, 
+				currentUserId: session?.user?.id,
+				hasSvelteFlowInstance: !!svelteFlowInstance
+			});
+		}
 	});
 
 	onDestroy(() => {
@@ -616,9 +858,19 @@
 	}
 
 	function onNodeDrag(params: any) {
+		console.log('[EDITOR] 🚀 onNodeDrag called:', { params, isCollaborative, isReadOnlyMode });
+		
 		// Enhanced real-time position updates during drag with bulletproof error handling
-		const { node } = params;
-		if (!node?.position || !node.id) return;
+		const node = params.targetNode || params.node;
+		if (!node) {
+			console.log('[EDITOR] ❌ No node in params:', params);
+			return;
+		}
+		
+		if (!node.position || !node.id) {
+			console.log('[EDITOR] ❌ Invalid node data for drag:', { node, hasPosition: !!node.position, hasId: !!node.id });
+			return;
+		}
 
 		try {
 			// Validate position values
@@ -631,10 +883,13 @@
 			position.x = Math.max(-5000, Math.min(5000, position.x));
 			position.y = Math.max(-5000, Math.min(5000, position.y));
 
+			console.log('[EDITOR] 📍 Calculated position:', position);
+
 			// Update local node position immediately for smooth UI
 			const nodeIndex = nodes.findIndex(n => n.id === node.id);
 			if (nodeIndex !== -1) {
 				nodes[nodeIndex] = { ...nodes[nodeIndex], position };
+				console.log('[EDITOR] ✅ Updated local node position');
 			}
 
 			// Broadcast to collaborators if in collaborative mode (throttled)
@@ -642,7 +897,10 @@
 			dragUpdateTimeout = setTimeout(() => {
 				try {
 					if (isCollaborative && !isReadOnlyMode) {
+						console.log('[EDITOR] 📤 Broadcasting position to collaborators');
 						broadcastNodeMovement(node.id, position);
+					} else {
+						console.log('[EDITOR] ⏭️ Not broadcasting - not collaborative or read-only');
 					}
 				} catch (error) {
 					console.warn('Error broadcasting position during drag:', error);
@@ -657,10 +915,7 @@
 		try {
 			isDragging = true;
 			
-			// Enhanced cursor state tracking
-			if (isCollaborative && params.node?.id) {
-				updateCursorAction('dragging', params.node.id);
-			}
+			// Removed cursor tracking
 		} catch (error) {
 			console.warn('Error updating cursor action on drag start:', error);
 		}
@@ -672,7 +927,7 @@
 			clearTimeout(dragUpdateTimeout);
 
 			// Final position update with validation
-			const { node } = params;
+			const node = params.targetNode || params.node;
 			if (node?.position && node.id) {
 				const position = {
 					x: isFinite(node.position.x) ? node.position.x : 0,
@@ -703,14 +958,13 @@
 			// Reset drag state - this will allow store sync to resume
 			isDragging = false;
 
-			// Reset cursor action
-			if (isCollaborative) {
-				updateCursorAction('idle');
-			}
+			// Removed cursor tracking
 		} catch (error) {
 			console.error('Error in onNodeDragStop:', error);
 		}
 	}
+
+	// Removed cursor tracking - too complex
 
 
 
@@ -933,14 +1187,15 @@
 				// Enable collaboration for this project
 				isCollaborative = true;
 
-				// Check if user has edit rights
-				const canEdit = await hasEditRights(projectId);
-				isReadOnlyMode = !canEdit;
+				// Since we're using direct YJS collaboration, everyone has edit rights
+				isReadOnlyMode = false;
 
 				// Update URL with project ID
 				const url = new URL(window.location.toString());
 				url.searchParams.set('id', projectId);
 				history.replaceState({}, '', url.toString());
+
+				// YJS will handle real-time changes, no need to sync database state
 			} else {
 				alert(`Failed to load project: ${result.error}`);
 			}
@@ -989,9 +1244,7 @@
 			// Load the project
 			await loadProject(projectId);
 
-			// Initialize collaboration
-			await initCollaboration(projectId);
-
+			// Collaboration will be initialized automatically when currentProjectId is set
 			console.log('Successfully joined collaborative session:', projectId);
 		} catch (error) {
 			console.error('Failed to join collaboration:', error);
@@ -1227,10 +1480,7 @@
 					</div>
 				{/if}
 
-				<!-- Collaborative Cursors -->
-				{#if isCollaborative}
-					<CollaborativeCursors />
-				{/if}
+				<!-- Collaborative cursors are now handled as SvelteFlow nodes -->
 			</SvelteFlow>
 
 

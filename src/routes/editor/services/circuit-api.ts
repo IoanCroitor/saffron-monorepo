@@ -23,9 +23,25 @@ class CircuitAPI {
 
 	async saveCircuit(name: string, description: string, userId: string, nodes: Node[], edges: Edge[]): Promise<{ success: boolean; project?: any; error?: string }> {
 		try {
+			// Compress data to reduce payload size
+			const compressedNodes = nodes.map(node => ({
+				id: node.id,
+				type: node.type,
+				position: node.position,
+				data: node.data
+			}));
+			
+			const compressedEdges = edges.map(edge => ({
+				id: edge.id,
+				source: edge.source,
+				target: edge.target,
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
+			}));
+
 			const schematicData: CircuitData = {
-				nodes,
-				edges,
+				nodes: compressedNodes,
+				edges: compressedEdges,
 				version: '1.0',
 				updated_at: new Date().toISOString()
 			};
@@ -60,9 +76,25 @@ class CircuitAPI {
 
 	async updateCircuit(projectId: string, name: string, description: string, nodes: Node[], edges: Edge[]): Promise<{ success: boolean; project?: any; error?: string }> {
 		try {
+			// Compress data to reduce payload size
+			const compressedNodes = nodes.map(node => ({
+				id: node.id,
+				type: node.type,
+				position: node.position,
+				data: node.data
+			}));
+			
+			const compressedEdges = edges.map(edge => ({
+				id: edge.id,
+				source: edge.source,
+				target: edge.target,
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
+			}));
+
 			const schematicData: CircuitData = {
-				nodes,
-				edges,
+				nodes: compressedNodes,
+				edges: compressedEdges,
 				version: '1.0',
 				updated_at: new Date().toISOString()
 			};
@@ -134,9 +166,25 @@ class CircuitAPI {
 	// Auto-save for collaborative editing
 	async autoSave(projectId: string, nodes: Node[], edges: Edge[]): Promise<boolean> {
 		try {
+			// Compress data to reduce payload size
+			const compressedNodes = nodes.map(node => ({
+				id: node.id,
+				type: node.type,
+				position: node.position,
+				data: node.data
+			}));
+			
+			const compressedEdges = edges.map(edge => ({
+				id: edge.id,
+				source: edge.source,
+				target: edge.target,
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
+			}));
+
 			const schematicData: CircuitData = {
-				nodes,
-				edges,
+				nodes: compressedNodes,
+				edges: compressedEdges,
 				version: '1.0',
 				updated_at: new Date().toISOString()
 			};

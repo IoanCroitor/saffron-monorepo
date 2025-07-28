@@ -43,6 +43,13 @@ Each component type has its own visual theme:
 - **Circuit Validation**: Basic circuit topology checking
 - **File Export**: Download netlists and JSON circuit files
 
+### 🤝 Real-time Collaboration
+- **YJS Integration**: Real-time collaborative editing using YJS protocol
+- **Live Cursors**: See other users' cursors and actions in real-time
+- **Instant Sync**: Changes are synchronized immediately across all connected users
+- **Room-based Isolation**: Each project has its own collaboration room
+- **Direct Array Manipulation**: No complex state management - direct array updates
+
 ## Usage
 
 1. **Adding Components**:
@@ -66,6 +73,12 @@ Each component type has its own visual theme:
 
 ## Technical Details
 
+### Architecture
+- **Direct Array Manipulation**: Uses Svelte's `$state` for local state management
+- **Callback-based Collaboration**: YJS collaboration uses callback functions for updates
+- **No Central Store**: Removed circuit store in favor of simpler local state
+- **Database Integration**: Supabase for persistence, YJS for real-time collaboration
+
 ### Component Data Structure
 ```typescript
 interface CircuitComponent {
@@ -74,6 +87,19 @@ interface CircuitComponent {
   parameters: ComponentParameters;
   position: { x: number; y: number };
   connections: { [portName: string]: string[] };
+}
+```
+
+### Collaboration System
+```typescript
+interface CollaborationCallbacks {
+  onNodeUpdate?: (nodeId: string, nodeData: any) => void;
+  onNodeAdd?: (nodeId: string, nodeData: any) => void;
+  onNodeRemove?: (nodeId: string) => void;
+  onEdgeUpdate?: (edgeId: string, edgeData: any) => void;
+  onEdgeAdd?: (edgeId: string, edgeData: any) => void;
+  onEdgeRemove?: (edgeId: string) => void;
+  onStateLoad?: (nodes: any[], edges: any[]) => void;
 }
 ```
 
