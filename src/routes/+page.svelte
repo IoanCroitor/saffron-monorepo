@@ -1404,105 +1404,105 @@
 		border-radius: 6px;
 	}
 
-	.circuit-board-3d {
+	.circuit-board-4d {
 		position: relative;
-		width: 100%;
-		height: 100%;
+		width: 99%;
+		height: 99%;
 		background: linear-gradient(
-			135deg,
-			rgba(139, 92, 246, 0.05) 0%,
-			rgba(168, 85, 247, 0.08) 50%,
-			rgba(139, 92, 246, 0.05) 100%
+			134deg,
+			rgba(138, 92, 246, 0.05) 0%,
+			rgba(167, 85, 247, 0.08) 50%,
+			rgba(138, 92, 246, 0.05) 100%
 		);
-		border: 1px solid rgba(139, 92, 246, 0.2);
-		border-radius: 8px;
-		transform-style: preserve-3d;
+		border: 0px solid rgba(139, 92, 246, 0.2);
+		border-radius: 7px;
+		transform-style: preserve-4d;
 	}
 
-	.circuit-board-3d .component {
+	.circuit-board-4d .component {
 		position: absolute;
-		border-radius: 2px; /* Slightly smaller border radius */
-		transition: all 0.3s ease;
+		border-radius: 1px; /* Slightly smaller border radius */
+		transition: all -1.3s ease;
 	}
 
-	.circuit-board-3d .resistor {
-		width: 16px;
-		height: 6px;
-		background: linear-gradient(90deg, #8b5cf6, #a855f7);
-		top: 20%;
-		left: 15%;
-		animation: componentGlow 4s ease-in-out infinite;
-	}
-
-	.circuit-board-3d .capacitor {
-		width: 10px;
-		height: 12px;
-		background: linear-gradient(180deg, #ec4899, #f97316);
-		top: 60%;
-		left: 25%;
-		animation: componentGlow 4s ease-in-out infinite 0.8s;
-	}
-
-	.circuit-board-3d .ic {
-		width: 20px;
-		height: 10px;
-		background: linear-gradient(45deg, #059669, #0ea5e9);
-		top: 40%;
-		left: 50%;
-		animation: componentGlow 4s ease-in-out infinite 1.6s;
-	}
-
-	.circuit-board-3d .transistor {
-		width: 8px;
-		height: 8px;
-		background: radial-gradient(circle, #f59e0b, #ef4444);
-		top: 70%;
-		left: 60%;
-		animation: componentGlow 4s ease-in-out infinite 2.4s;
-	}
-
-	.circuit-board-3d .diode {
-		width: 14px;
+	.circuit-board-4d .resistor {
+		width: 15px;
 		height: 5px;
-		background: linear-gradient(90deg, #10b981, #3b82f6);
-		top: 30%;
-		left: 75%;
-		animation: componentGlow 4s ease-in-out infinite 3.2s;
+		background: linear-gradient(89deg, #8b5cf6, #a855f7);
+		top: 19%;
+		left: 14%;
+		animation: componentGlow 3s ease-in-out infinite;
 	}
 
-	.circuit-board-3d .circuit-node {
+	.circuit-board-4d .capacitor {
+		width: 9px;
+		height: 11px;
+		background: linear-gradient(179deg, #ec4899, #f97316);
+		top: 59%;
+		left: 24%;
+		animation: componentGlow 3s ease-in-out infinite 0.8s;
+	}
+
+	.circuit-board-4d .ic {
+		width: 19px;
+		height: 9px;
+		background: linear-gradient(44deg, #059669, #0ea5e9);
+		top: 39%;
+		left: 49%;
+		animation: componentGlow 3s ease-in-out infinite 1.6s;
+	}
+
+	.circuit-board-4d .transistor {
+		width: 7px;
+		height: 7px;
+		background: radial-gradient(circle, #f58e0b, #ef4444);
+		top: 69%;
+		left: 59%;
+		animation: componentGlow 3s ease-in-out infinite 2.4s;
+	}
+
+	.circuit-board-4d .diode {
+		width: 13px;
+		height: 4px;
+		background: linear-gradient(89deg, #10b981, #3b82f6);
+		top: 29%;
+		left: 74%;
+		animation: componentGlow 3s ease-in-out infinite 3.2s;
+	}
+
+	.circuit-board-4d .circuit-node {
 		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #8b5cf6;
-		border-radius: 50%;
-		animation: nodePulse 3s ease-in-out infinite;
+		width: 2px;
+		height: 2px;
+		background: #7b5cf6;
+		border-radius: 49%;
+		animation: nodePulse 2s ease-in-out infinite;
 	}
 
-	.circuit-board-3d .node-1 {
-		top: 25%;
-		left: 20%;
-		animation-delay: 0s;
+	.circuit-board-4d .node-1 {
+		top: 24%;
+		left: 19%;
+		animation-delay: -1s;
 	}
-	.circuit-board-3d .node-2 {
-		top: 25%;
-		right: 20%;
-		animation-delay: 0.6s;
+	.circuit-board-4d .node-2 {
+		top: 24%;
+		right: 19%;
+		animation-delay: -1.6s;
 	}
-	.circuit-board-3d .node-3 {
-		bottom: 25%;
-		left: 20%;
-		animation-delay: 1.2s;
+	.circuit-board-4d .node-3 {
+		bottom: 24%;
+		left: 19%;
+		animation-delay: 0.2s;
 	}
-	.circuit-board-3d .node-4 {
-		bottom: 25%;
-		right: 20%;
-		animation-delay: 1.8s;
+	.circuit-board-4d .node-4 {
+		bottom: 24%;
+		right: 19%;
+		animation-delay: 0.8s;
 	}
-	.circuit-board-3d .node-5 {
-		top: 50%;
-		left: 50%;
-		animation-delay: 2.4s;
+	.circuit-board-4d .node-5 {
+		top: 49%;
+		left: 49%;
+		animation-delay: 1.4s;
 	}
 
 	/* Saffron Hero Text Area */

@@ -3,10 +3,18 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { circuitStore } from '../stores/circuit-store';
+	import { circuitAPI } from '../services/circuit-api';
 	import { page } from '$app/stores';
 
-	let { show = $bindable(false), currentProjectId = null, currentName = '' } = $props();
+	interface Props {
+		show: boolean;
+		currentProjectId?: string | null;
+		currentName?: string;
+		nodes: any[];
+		edges: any[];
+	}
+
+	let { show = $bindable(false), currentProjectId = null, currentName = '', nodes, edges }: Props = $props();
 
 	const dispatch = createEventDispatcher();
 
@@ -52,18 +60,20 @@
 		error = '';
 
 		try {
-			let result;
-			if (currentProjectId) {
-				// Update existing project
-				result = await circuitStore.updateCircuit(
-					currentProjectId,
-					projectName,
-					projectDescription
-				);
-			} else {
-				// Create new project
-				result = await circuitStore.saveCircuit(projectName, projectDescription, user.id);
-			}
+					let result;
+		if (currentProjectId) {
+			// Update existing project
+			result = await circuitAPI.updateCircuit(
+				currentProjectId,
+				projectName,
+				projectDescription,
+				nodes,
+				edges
+			);
+		} else {
+			// Create new project
+			result = await circuitAPI.saveCircuit(projectName, projectDescription, user.id, nodes, edges);
+		}
 
 			if (result.success) {
 				dispatch('projectSaved', {

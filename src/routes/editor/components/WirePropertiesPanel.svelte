@@ -2,13 +2,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import type { Edge } from '@xyflow/svelte';
-	import { circuitStore } from '../stores/circuit-store';
 
-	let { selectedWire = $bindable(), edges = $bindable(), onRefresh }: { 
-		selectedWire: Edge | null, 
-		edges: Edge[], 
-		onRefresh?: () => void 
-	} = $props();
+	interface Props {
+		selectedWire: Edge | null;
+		edges: Edge[];
+		onRefresh?: () => void;
+		onUpdateWireStyle: (edgeId: string, wireShape: string, wireStyle?: string, color?: string) => void;
+		onRemoveConnection: (edgeId: string) => void;
+	}
+
+	let { selectedWire = $bindable(), edges = $bindable(), onRefresh, onUpdateWireStyle, onRemoveConnection }: Props = $props();
 
 	const wireShapes = [
 		{ value: 'straight', label: 'Straight', icon: '─' },
@@ -33,8 +36,8 @@
 
 	function updateWireShape(shape: string) {
 		if (selectedWire) {
-			// Update the store first
-			circuitStore.updateWireStyle(selectedWire.id, shape);
+			// Update through the parent callback
+			onUpdateWireStyle(selectedWire.id, shape);
 			
 			// Force immediate update of local edges array
 			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
@@ -66,7 +69,7 @@
 			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
 			
 			// Update the store first
-			circuitStore.updateWireStyle(
+			onUpdateWireStyle(
 				selectedWire.id,
 				currentShape,
 				style
@@ -103,7 +106,7 @@
 			const currentStyle = (selectedWire.data as any)?.wireStyle || 'solid';
 			
 			// Update the store first
-			circuitStore.updateWireStyle(
+			onUpdateWireStyle(
 				selectedWire.id,
 				currentShape,
 				currentStyle,
@@ -135,7 +138,7 @@
 	function deleteWire() {
 		if (selectedWire) {
 			// Update the store
-			circuitStore.removeConnection(selectedWire.id);
+			onRemoveConnection(selectedWire.id);
 			
 			// Update the local edges array directly for immediate visual feedback
 			edges = edges.filter(edge => edge.id !== selectedWire?.id);

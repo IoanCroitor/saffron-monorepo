@@ -4,7 +4,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card } from '$lib/components/ui/card';
 	import ComponentIcon from './ComponentIcon.svelte';
-	import { circuitStore } from '../stores/circuit-store';
+
+	// Props for state management
+	interface Props {
+		nodes: any[];
+		edges: any[];
+		onAddComponent: (type: string, position: { x: number; y: number }) => void;
+		onClearCircuit: () => void;
+	}
+
+	let { nodes, edges, onAddComponent, onClearCircuit }: Props = $props();
 
 	let searchTerm = $state('');
 	let draggedComponent = $state<string | null>(null);
@@ -93,8 +102,15 @@
 	}
 
 	function handleClick(componentType: string) {
-		// Add component at center of viewport
-		circuitStore.addComponent(componentType, { x: 400, y: 300 });
+		// Add component at center of viewport with some randomization to avoid overlap
+		const baseX = 400;
+		const baseY = 300;
+		const randomOffset = () => (Math.random() - 0.5) * 100; // ±50px random offset
+		
+		onAddComponent(componentType, { 
+			x: baseX + randomOffset(), 
+			y: baseY + randomOffset() 
+		});
 	}
 
 
@@ -158,7 +174,7 @@
 
 	<!-- Footer -->
 	<div class="p-4 border-t border-border space-y-2">
-		<Button variant="outline" size="sm" class="w-full" onclick={() => circuitStore.clear()}>
+		<Button variant="outline" size="sm" class="w-full" onclick={onClearCircuit}>
 			Clear Circuit
 		</Button>
 	</div>

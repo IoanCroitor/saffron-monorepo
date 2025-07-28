@@ -14,12 +14,18 @@
     import { Badge } from '$lib/components/ui/badge';
     import { Zap, Settings, Trash2, Copy, RotateCcw, ChevronDown } from '@lucide/svelte';
     import type { Node } from '@xyflow/svelte';
-    import { circuitStore } from '../stores/circuit-store';
 	import { Switch } from '$lib/components/ui/switch';
+	import type { Edge } from '@xyflow/svelte';
 
     interface Props {
         selectedNode: Node | null;
         nodes: Node[];
+        edges: Edge[];
+        onUpdateComponent: (id: string, parameters: any) => void;
+        onRemoveComponent: (id: string) => void;
+        onAddComponent: (type: string, position: { x: number; y: number }) => void;
+        onExportNetlist: () => string;
+        onExportJSON: () => string;
     }
 
     interface FieldDefinition {
@@ -37,7 +43,7 @@
         condition?: (params: Record<string, any>) => boolean;
     }
 
-    let { selectedNode = $bindable(), nodes = $bindable() }: Props = $props();
+    let { selectedNode = $bindable(), nodes = $bindable(), edges, onUpdateComponent, onRemoveComponent, onAddComponent, onExportNetlist, onExportJSON }: Props = $props();
 
     let parameters = $state<Record<string, any>>({});
 
@@ -65,7 +71,7 @@
         
         if (selectedNode) {
             // Update the store
-            circuitStore.updateComponent(selectedNode.id, parameters);
+            onUpdateComponent(selectedNode.id, parameters);
             
             // Force immediate update of nodes array for instant visual feedback
             const nodeIndex = nodes.findIndex(node => node.id === selectedNode!.id);
@@ -94,7 +100,7 @@
 
     function deleteComponent() {
         if (selectedNode) {
-            circuitStore.removeComponent(selectedNode.id);
+            onRemoveComponent(selectedNode.id);
         }
     }
 
@@ -104,7 +110,7 @@
                 x: selectedNode.position.x + 50,
                 y: selectedNode.position.y + 50
             };
-            circuitStore.addComponent(selectedNode.type!, newPosition);
+            onAddComponent(selectedNode.type!, newPosition);
         }
     }
 
@@ -114,7 +120,7 @@
             parameters = { ...defaultParams };
             
             // Update the store
-            circuitStore.updateComponent(selectedNode.id, parameters);
+            onUpdateComponent(selectedNode.id, parameters);
             
             // Force immediate update of nodes array for instant visual feedback
             const nodeIndex = nodes.findIndex(node => node.id === selectedNode!.id);
@@ -142,7 +148,7 @@
     }
 
     function copyNetlist() {
-        const netlist = circuitStore.exportNetlist();
+        const netlist = onExportNetlist();
         navigator.clipboard.writeText(netlist).then(() => {
             // You could add a toast notification here if you have one set up
             console.log('Netlist copied to clipboard');
@@ -152,12 +158,12 @@
     }
 
     function exportNetlist() {
-        const netlist = circuitStore.exportNetlist();
+        const netlist = onExportNetlist();
         downloadFile(netlist, 'circuit.cir', 'text/plain');
     }
 
     function exportJSON() {
-        const jsonData = circuitStore.exportJSON();
+        const jsonData = onExportJSON();
         downloadFile(jsonData, 'circuit.json', 'application/json');
     }
 
@@ -307,6 +313,7 @@
                         label: 'Phase',
                         type: 'slider',
                         unit: '°',
+                        placeholder: '0',
                         min: 0,
                         max: 360,
                         step: 1,
@@ -343,6 +350,7 @@
                         label: 'Via Count',
                         type: 'slider',
                         unit: '',
+                        placeholder: '4',
                         min: 1,
                         max: 50,
                         step: 1,
