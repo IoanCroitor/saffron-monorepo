@@ -514,7 +514,7 @@
 	onMount(() => {
 		// Check if we have a project ID in the URL
 		const urlParams = new URLSearchParams(window.location.search);
-		const projectId = urlParams.get('project');
+		const projectId = urlParams.get('id');
 
 		if (projectId) {
 			// Load the project
@@ -899,7 +899,7 @@
 
 				// Update URL with project ID
 				const url = new URL(window.location.toString());
-				url.searchParams.set('project', projectId);
+				url.searchParams.set('id', projectId);
 				history.replaceState({}, '', url.toString());
 			} else {
 				alert(`Failed to load project: ${result.error}`);
