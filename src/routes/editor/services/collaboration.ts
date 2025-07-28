@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import { get } from 'svelte/store';
 import { browser } from '$app/environment';
-import { circuitStore } from '../stores/circuit-store';
+// Circuit store removed - collaboration now works with external state management
 import { getRandomColor, getUserColor } from '$lib/utils/color-utils';
 import { createSupabaseBrowserClient } from '$lib/supabase';
 import * as Y from 'yjs';
@@ -131,11 +131,12 @@ function setupEventListeners() {
 			if (change.action === 'add' || change.action === 'update') {
 				const nodeData = nodesMap!.get(key);
 				if (nodeData && nodeData.userId !== currentUserId) {
-					// Update from another user
-					circuitStore.updateNodePositionFromCollaborator(key, nodeData.position);
+					// TODO: Update from another user - need to implement callback system
+					console.log('[COLLABORATION] Node update from collaborator:', key, nodeData.position);
 				}
 			} else if (change.action === 'delete') {
-				circuitStore.removeComponentFromCollaborator(key);
+				// TODO: Remove component from collaborator - need to implement callback system
+				console.log('[COLLABORATION] Component removed by collaborator:', key);
 			}
 		});
 	});
@@ -146,11 +147,12 @@ function setupEventListeners() {
 			if (change.action === 'add' || change.action === 'update') {
 				const edgeData = edgesMap!.get(key);
 				if (edgeData && edgeData.userId !== currentUserId) {
-					// Update from another user
-					circuitStore.addConnectionFromCollaborator(edgeData);
+					// TODO: Update from another user - need to implement callback system
+					console.log('[COLLABORATION] Edge added by collaborator:', edgeData);
 				}
 			} else if (change.action === 'delete') {
-				circuitStore.removeConnectionFromCollaborator(key);
+				// TODO: Remove connection from collaborator - need to implement callback system
+				console.log('[COLLABORATION] Edge removed by collaborator:', key);
 			}
 		});
 	});
@@ -425,12 +427,14 @@ export async function cleanupCollaboration() {
 
 /**
  * Get the current circuit state for syncing
+ * TODO: Refactor to use callback system instead of circuit store
  */
 export function getCurrentCircuitState() {
-	const store = get(circuitStore);
+	// TODO: Need to implement callback system to get current state
+	console.log('[COLLABORATION] getCurrentCircuitState called - needs refactoring');
 	return {
-		nodes: store.nodes,
-		edges: store.edges
+		nodes: [],
+		edges: []
 	};
 }
 
@@ -459,8 +463,8 @@ export function loadCircuitStateFromYjs() {
 		});
 	});
 
-	// Update circuit store
-	circuitStore.loadFromJson({ nodes, edges });
+	// TODO: Update circuit state using callback system
+	console.log('[COLLABORATION] loadCircuitStateFromYjs called - needs refactoring', { nodes, edges });
 }
 
 /**

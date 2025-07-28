@@ -25,7 +25,7 @@
 	import { GoogleGenerativeAI } from '@google/generative-ai';
 	import {env}  from '$env/dynamic/public';
 	import { page } from '$app/stores';
-	import { circuitStore } from '../editor/stores/circuit-store';
+	import { circuitAPI } from '../editor/services/circuit-api';
 
 	let { data } = $props();
 	
@@ -562,11 +562,13 @@ Only output the SPICE netlist. Do not include any explanations, headers, or addi
 		try {
 			const { schematicData } = convertSpiceToJSON(spiceNetlist, schematicName, schematicDescription);
 			
-			// Use the circuit store's saveCircuit method to save to database
-			const result = await circuitStore.saveCircuit(
+			// Use the circuit API to save to database
+			const result = await circuitAPI.saveCircuit(
 				schematicName,
 				schematicDescription || 'Converted from SPICE netlist via Circuit Scanner',
-				user.id
+				user.id,
+				schematicData.nodes,
+				schematicData.edges
 			);
 			
 			if (result.success) {

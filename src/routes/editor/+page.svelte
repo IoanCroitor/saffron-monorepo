@@ -33,8 +33,8 @@
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
-	import { circuitStore } from './stores/circuit-store';
 	import { settingsStore } from './stores/settings-store';
+	import { circuitAPI } from './services/circuit-api';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
@@ -54,6 +54,93 @@
 	import CollaborativeCursors from './components/CollaborativeCursors.svelte';
 
 	import '@xyflow/svelte/dist/style.css';
+
+	// Default parameters for different component types
+	function getDefaultParameters(type: string): any {
+		switch (type) {
+			case 'resistor':
+				return {
+					resistance: '1k',
+					tolerance: '5%',
+					power: '0.25W',
+					temperature_coefficient: '100'
+				};
+			case 'capacitor':
+				return {
+					capacitance: '1μ',
+					voltage: '25V',
+					type: 'Ceramic',
+					esr: '0.1'
+				};
+			case 'inductor':
+				return {
+					inductance: '1m',
+					current: '1A',
+					dcr: '1',
+					core_material: 'Ferrite'
+				};
+			case 'voltageSource':
+				return {
+					voltage: '5V',
+					type: 'DC',
+					frequency: '60',
+					phase: 0
+				};
+			case 'currentSource':
+				return {
+					current: '1A',
+					type: 'DC'
+				};
+			case 'diode':
+				return {
+					type: '1N4148',
+					forwardVoltage: '0.7',
+					current: '200m',
+					reverse_voltage: '100'
+				};
+			case 'transistor':
+				return {
+					type: '2N3904',
+					configuration: 'NPN',
+					beta: 100,
+					vce_sat: '0.2'
+				};
+			case 'opamp':
+				return {
+					type: 'LM741',
+					gain: '100k',
+					supply: '±15V',
+					gainBandwidth: '1M',
+					slew_rate: '0.5'
+				};
+			case 'ground':
+				return {
+					type: 'Earth',
+					impedance: '0',
+					plane_area: 'Large',
+					via_count: 4
+				};
+			case 'voltmeter':
+				return {
+					range: '10V',
+					impedance: '10M',
+					accuracy: '1%'
+				};
+			case 'ammeter':
+				return {
+					range: '1A',
+					resistance: '0.1'
+				};
+			case 'probe':
+				return {
+					impedance: '1M',
+					capacitance: '10p',
+					attenuation: '1x'
+				};
+			default:
+				return {};
+		}
+	}
 
 	// Node types mapping
 	const nodeTypes: NodeTypes = {
@@ -75,13 +162,54 @@
 		wire: WireEdge
 	};
 
+	// Simple local state - no complex syncing!
 	let nodes = $state<Node[]>([]);
 	let edges = $state<Edge[]>([]);
+	let isDragging = $state(false);
+	let hasUnsavedChanges = $state(false);
+	let isAutoSaving = $state(false);
 
+	// Track changes for auto-save
 	$effect(() => {
-		console.log('Nodes:', nodes);
-		console.log('Edges:', edges);
+		// Mark as having changes whenever nodes or edges change
+		if (nodes.length > 0 || edges.length > 0) {
+			hasUnsavedChanges = true;
+		}
+		
+		console.log('[EDITOR] Circuit state:', {
+			nodes: nodes.length,
+			edges: edges.length,
+			hasUnsavedChanges
+		});
 	});
+
+	// Auto-save in collaborative mode (debounced)
+	let autoSaveTimeout: ReturnType<typeof setTimeout>;
+	$effect(() => {
+		if (isCollaborative && currentProjectId && hasUnsavedChanges && !isDragging) {
+			clearTimeout(autoSaveTimeout);
+			autoSaveTimeout = setTimeout(async () => {
+				await performAutoSave();
+			}, 2000); // Auto-save after 2 seconds of inactivity
+		}
+	});
+
+	async function performAutoSave() {
+		if (!currentProjectId || !hasUnsavedChanges || isAutoSaving) return;
+		
+		isAutoSaving = true;
+		try {
+			const success = await circuitAPI.autoSave(currentProjectId, nodes, edges);
+			if (success) {
+				hasUnsavedChanges = false;
+				console.log('[EDITOR] Auto-saved successfully');
+			}
+		} catch (error) {
+			console.error('[EDITOR] Auto-save failed:', error);
+		} finally {
+			isAutoSaving = false;
+		}
+	}
 
 	let selectedNode = $state<Node | null>(null);
 	let selectedWire = $state<Edge | null>(null);
@@ -94,7 +222,6 @@
 	let showDebugMenu = $state(false);
 	let currentProjectId = $state<string | null>(null);
 	let currentProjectName = $state<string>('Untitled Circuit');
-	let hasUnsavedChanges = $state(false);
 	let dragUpdateTimeout: ReturnType<typeof setTimeout>;
 
 	// Collaboration state
@@ -104,169 +231,193 @@
 	let collaboratorCount = $state(0);
 	let collaborationCleanupFn: (() => void) | null = null;
 
-	// Force refresh key for reactive updates
-	const flowKey = $derived(JSON.stringify(edges.map((e) => ({ id: e.id, data: e.data }))));
-
-	// Force refresh function to trigger wire updates
-	function forceRefreshWires() {
-		// Create a new array reference to trigger reactivity
-		edges = [...edges];
-		// Also update the selected wire if it exists
-		if (selectedWire?.id) {
-			const updatedWire = edges.find((edge) => edge.id === selectedWire!.id);
-			if (updatedWire) {
-				selectedWire = { ...updatedWire };
+	// Removed flowKey - no longer needed with improved reactivity
+	// Function to add component from sidebar
+	function addComponent(type: string, position: { x: number; y: number }) {
+		const componentId = generateComponentId(type, session?.user?.id || 'anonymous');
+		const newNode = {
+			id: componentId,
+			type,
+			position: {
+				x: Math.round(position.x / 10) * 10,
+				y: Math.round(position.y / 10) * 10
+			},
+			data: {
+				label: type,
+				parameters: getDefaultParameters(type)
 			}
+		};
+		
+		nodes = [...nodes, newNode];
+		console.log('[EDITOR] Component added from sidebar:', { type, id: componentId, position });
+
+		// Broadcast to collaborators if in collaborative mode
+		if (isCollaborative && !isReadOnlyMode) {
+			broadcastComponentAdded(type, position, componentId);
 		}
 	}
 
-	// Enhanced reactive effect for bulletproof position handling
-	$effect(() => {
-		const store = $circuitStore;
-
-		// Skip updates if store is empty during initialization
-		if (!store.nodes || store.nodes.length === 0) {
-			return;
+	// Function to clear circuit
+	function clearCircuit() {
+		if (hasUnsavedChanges) {
+			const confirmed = confirm('You have unsaved changes. Are you sure you want to clear the circuit?');
+			if (!confirmed) return;
 		}
+		
+		nodes = [];
+		edges = [];
+		selectedNode = null;
+		selectedWire = null;
+		hasUnsavedChanges = false;
+		console.log('[EDITOR] Circuit cleared');
+	}
 
-		// Check for structural changes (components added/removed)
-		const currentNodeIds = new Set(nodes.map((n) => n.id));
-		const storeNodeIds = new Set(store.nodes.map((n) => n.id));
-		const structuralChange =
-			currentNodeIds.size !== storeNodeIds.size ||
-			!Array.from(currentNodeIds).every((id) => storeNodeIds.has(id)) ||
-			!Array.from(storeNodeIds).every((id) => currentNodeIds.has(id));
+	// Component operations for PropertiesSidebar
+	function updateComponent(id: string, parameters: any) {
+		const nodeIndex = nodes.findIndex(node => node.id === id);
+		if (nodeIndex !== -1) {
+			nodes[nodeIndex] = {
+				...nodes[nodeIndex],
+				data: {
+					...nodes[nodeIndex].data,
+					parameters
+				}
+			};
+			console.log('[EDITOR] Component updated:', { id, parameters });
+		}
+	}
 
-		// Check for data/parameter changes in existing nodes
-		const dataChange =
-			!structuralChange &&
-			store.nodes.some((storeNode) => {
-				const currentNode = nodes.find((n) => n.id === storeNode.id);
-				return currentNode && JSON.stringify(currentNode.data) !== JSON.stringify(storeNode.data);
-			});
+	function removeComponent(id: string) {
+		// Remove node and connected edges
+		nodes = nodes.filter(node => node.id !== id);
+		edges = edges.filter(edge => edge.source !== id && edge.target !== id);
+		
+		// Broadcast component removal to collaborators
+		if (isCollaborative && !isReadOnlyMode) {
+			broadcastComponentRemoved(id);
+		}
+		
+		console.log('[EDITOR] Component removed:', { id });
+	}
 
-		if (structuralChange || dataChange) {
-			// Create a robust position tracking system
-			const currentPositions = new Map(nodes.map((node) => [node.id, { ...node.position }]));
+	// Export functions for PropertiesSidebar
+	function exportNetlist(): string {
+		// Simplified netlist export - can be moved to a separate utility file
+		const netlist: string[] = [];
+		netlist.push('* Circuit Netlist Generated by Saffron Circuit Simulator');
+		
+		// Add components
+		nodes.forEach((node, index) => {
+			const { id, type, data } = node;
+			const params = (data?.parameters as any) || {};
+			const compId = `${type?.charAt(0).toUpperCase()}${index + 1}`;
+			
+			switch (type) {
+				case 'resistor':
+					netlist.push(`${compId} n1 n2 ${params.resistance || '1k'}`);
+					break;
+				case 'capacitor':
+					netlist.push(`${compId} n1 n2 ${params.capacitance || '1u'}`);
+					break;
+				case 'voltageSource':
+					netlist.push(`${compId} n1 0 ${params.voltage || '5V'}`);
+					break;
+				// Add more component types as needed
+			}
+		});
+		
+		netlist.push('.end');
+		return netlist.join('\n');
+	}
 
-			// Track newly added components with bulletproof detection
-			const newNodeIds = new Set(
-				store.nodes.filter((storeNode) => !currentNodeIds.has(storeNode.id)).map((node) => node.id)
+	function exportJSON(): string {
+		return JSON.stringify({
+			version: '1.0',
+			nodes,
+			edges,
+			created_at: new Date().toISOString()
+		}, null, 2);
+	}
+
+	// Load from JSON function for debug menu
+	function loadFromJson(data: any) {
+		if (data.nodes && data.edges) {
+			nodes = data.nodes || [];
+			edges = data.edges || [];
+			console.log('[EDITOR] Circuit loaded from JSON:', { nodes: nodes.length, edges: edges.length });
+		}
+	}
+
+	// Wire operations for WirePropertiesPanel
+	function updateWireStyle(edgeId: string, wireShape: string, wireStyle?: string, color?: string) {
+		console.log('[EDITOR] updateWireStyle called:', { edgeId, wireShape, wireStyle, color });
+		
+		const edgeIndex = edges.findIndex(edge => edge.id === edgeId);
+		if (edgeIndex !== -1) {
+			const oldEdge = edges[edgeIndex];
+			console.log('[EDITOR] Found edge to update:', { oldData: oldEdge.data });
+			
+			// Create the updated edge with proper data merging
+			const updatedEdge = {
+				...oldEdge,
+				data: {
+					...oldEdge.data,
+					wireShape,
+					...(wireStyle !== undefined && { wireStyle }),
+					...(color !== undefined && { color })
+				}
+			};
+			
+			console.log('[EDITOR] Updated edge data:', { newData: updatedEdge.data });
+			
+			// Force reactivity by creating new edges array
+			edges = edges.map((edge, index) => 
+				index === edgeIndex ? updatedEdge : edge
 			);
-
-			// Enhanced position update logic with multiple fallbacks
-			nodes = store.nodes.map((storeNode) => {
-				const currentPos = currentPositions.get(storeNode.id);
-
-				// Priority 1: New components always use store position (prevents center reversion)
-				const isNewComponent = newNodeIds.has(storeNode.id);
-				if (isNewComponent) {
-					return { ...storeNode };
-				}
-
-				// Priority 2: No current position means fresh load - use store
-				if (!currentPos) {
-					return { ...storeNode };
-				}
-
-				// Priority 3: Detect collaborator updates with enhanced threshold
-				const positionDelta = {
-					x: Math.abs(storeNode.position.x - currentPos.x),
-					y: Math.abs(storeNode.position.y - currentPos.y)
-				};
-
-				const isCollaboratorUpdate =
-					isCollaborative && (positionDelta.x > 15 || positionDelta.y > 15); // Increased threshold for reliability
-
-				if (isCollaboratorUpdate) {
-					return { ...storeNode };
-				}
-
-				// Priority 4: Handle zero positions (default center) - use store position
-				const isZeroPosition = storeNode.position.x === 0 && storeNode.position.y === 0;
-				if (isZeroPosition) {
-					return { ...storeNode };
-				}
-
-				// Priority 5: Handle invalid positions
-				const isInvalidPosition =
-					!isFinite(currentPos.x) ||
-					!isFinite(currentPos.y) ||
-					currentPos.x < -10000 ||
-					currentPos.x > 10000 ||
-					currentPos.y < -10000 ||
-					currentPos.y > 10000;
-
-				if (isInvalidPosition) {
-					return { ...storeNode };
-				}
-
-				// Default: Preserve current position for local changes
-				return { ...storeNode, position: currentPos };
-			});
-		}
-
-		// Bulletproof edge synchronization
-		const newEdges = [...store.edges];
-		const edgesChanged =
-			JSON.stringify(edges.map((e) => ({ id: e.id, source: e.source, target: e.target }))) !==
-			JSON.stringify(newEdges.map((e) => ({ id: e.id, source: e.source, target: e.target })));
-
-		if (edgesChanged) {
-			edges = newEdges;
-		}
-
-		// Sync selected wire with enhanced error checking
-		if (selectedWire?.id) {
-			const updatedEdge = store.edges.find((edge) => edge.id === selectedWire!.id);
-			if (updatedEdge && JSON.stringify(updatedEdge) !== JSON.stringify(selectedWire)) {
-				selectedWire = { ...updatedEdge };
-			} else if (!updatedEdge) {
-				// Wire was deleted
-				selectedWire = null;
+			
+			// Update selectedWire if it's the same edge
+			if (selectedWire?.id === edgeId) {
+				selectedWire = updatedEdge;
 			}
+			
+			console.log('[EDITOR] Wire style updated successfully');
+		} else {
+			console.warn('[EDITOR] Edge not found:', edgeId);
 		}
-	});
+	}
 
-	// Keep selectedWire synchronized with store changes
+	function removeConnection(edgeId: string) {
+		edges = edges.filter(edge => edge.id !== edgeId);
+		
+		// Broadcast connection removal to collaborators
+		if (isCollaborative && !isReadOnlyMode) {
+			broadcastConnectionRemoved(edgeId);
+		}
+		
+		console.log('[EDITOR] Connection removed:', { edgeId });
+	}
+
+	// Removed forceRefreshWires function - no longer needed with improved reactivity
+
+	// Keep selected elements in sync with store changes
 	$effect(() => {
-		if (selectedWire?.id && edges.length > 0) {
-			const updatedWire = edges.find((edge) => edge.id === selectedWire!.id);
-			if (updatedWire && updatedWire !== selectedWire) {
-				selectedWire = updatedWire;
-			}
+		// Check if selected wire was deleted
+		if (selectedWire?.id && !edges.find((edge) => edge.id === selectedWire!.id)) {
+			selectedWire = null;
+		}
+
+		// Check if selected node was deleted
+		if (selectedNode?.id && !nodes.find((node) => node.id === selectedNode!.id)) {
+			selectedNode = null;
 		}
 	});
 
-	// Keep selectedNode synchronized with store changes
-	$effect(() => {
-		if (selectedNode?.id && nodes.length > 0) {
-			const updatedNode = nodes.find((node) => node.id === selectedNode!.id);
-			if (
-				updatedNode &&
-				JSON.stringify(updatedNode.data?.parameters) !==
-					JSON.stringify(selectedNode.data?.parameters)
-			) {
-				selectedNode = updatedNode;
-			}
-		}
-	});
+
 
 	// Listen for wire selection events
 	$effect(() => {
-		function handleWireSelection(event: Event) {
-			const customEvent = event as CustomEvent;
-			const wireData = customEvent.detail;
-			selectedWire = {
-				...wireData,
-				source: wireData.source,
-				target: wireData.target,
-				sourceHandle: wireData.sourceHandle,
-				targetHandle: wireData.targetHandle
-			};
-			selectedNode = null; // Clear node selection
-		}
-
+		// Removed wireSelected event listener - using SvelteFlow's onedgeclick instead
+		
 		// Keyboard shortcuts
 		function handleKeyDown(event: KeyboardEvent) {
 			// Check if the user is typing in an input field
@@ -288,11 +439,14 @@
 			} else if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
 				// Only delete components if not typing in an input field
 				if (selectedWire) {
-					circuitStore.removeConnection(selectedWire.id);
+					// Remove edge from local state
+					edges = edges.filter(edge => edge.id !== selectedWire!.id);
 					selectedWire = null;
 				} else if (selectedNode) {
 					const nodeId = selectedNode.id;
-					circuitStore.removeComponent(nodeId);
+					// Remove node and connected edges from local state
+					nodes = nodes.filter(node => node.id !== nodeId);
+					edges = edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
 
 					// Broadcast component removal to collaborators
 					if (isCollaborative && !isReadOnlyMode) {
@@ -316,11 +470,9 @@
 			}
 		}
 
-		document.addEventListener('wireSelected', handleWireSelection);
 		document.addEventListener('keydown', handleKeyDown);
 
 		return () => {
-			document.removeEventListener('wireSelected', handleWireSelection);
 			document.removeEventListener('keydown', handleKeyDown);
 		};
 	});
@@ -328,8 +480,6 @@
 	// Initialize collaboration when project ID is available
 	$effect(() => {
 		if (currentProjectId) {
-			// Enable collaboration in the store
-			circuitStore.enableCollaboration(currentProjectId);
 			isCollaborative = true;
 
 			// Initialize real-time collaboration asynchronously
@@ -347,7 +497,6 @@
 			})();
 		} else {
 			// Disable collaboration when no project is loaded
-			circuitStore.disableCollaboration();
 			isCollaborative = false;
 			isReadOnlyMode = false;
 
@@ -375,7 +524,7 @@
 
 		// Set up auto-save interval for collaborative editing
 		autoSaveInterval = setInterval(() => {
-			if (isCollaborative && !isReadOnlyMode && $circuitStore.pendingChanges) {
+			if (isCollaborative && !isReadOnlyMode && hasUnsavedChanges) {
 				saveChanges();
 			}
 		}, 10000); // Auto-save every 10 seconds if changes
@@ -392,8 +541,7 @@
 			collaborationCleanupFn();
 		}
 
-		// Update the store with all current positions before unmounting
-		syncAllPositionsToStore();
+
 	});
 
 	function onNodeClick(event: any) {
@@ -406,16 +554,26 @@
 	}
 
 	function onConnect(params: any) {
+		// Generate unique edge ID to prevent conflicts when connecting same nodes multiple times
+		const timestamp = Date.now();
 		const newEdge = {
-			id: `edge-${params.source}-${params.target}`,
+			id: `edge-${params.source}-${params.target}-${timestamp}`,
 			source: params.source,
 			target: params.target,
 			sourceHandle: params.sourceHandle,
 			targetHandle: params.targetHandle,
 			type: 'wire',
-			data: { color: '#64748b', wireShape: 'smoothstep', wireStyle: 'solid' }
+			data: { 
+				color: '#64748b', 
+				wireShape: 'smoothstep', 
+				wireStyle: 'solid' 
+			}
 		};
-		circuitStore.addConnection(newEdge);
+
+		console.log('[EDITOR] Creating new wire connection:', newEdge);
+
+		// Add edge to local state
+		edges = [...edges, newEdge];
 
 		// Broadcast connection addition to collaborators
 		if (isCollaborative && !isReadOnlyMode) {
@@ -439,20 +597,23 @@
 			position.x = Math.max(-5000, Math.min(5000, position.x));
 			position.y = Math.max(-5000, Math.min(5000, position.y));
 
-			// Always update store with throttling for performance
+			// Update local node position immediately for smooth UI
+			const nodeIndex = nodes.findIndex(n => n.id === node.id);
+			if (nodeIndex !== -1) {
+				nodes[nodeIndex] = { ...nodes[nodeIndex], position };
+			}
+
+			// Broadcast to collaborators if in collaborative mode (throttled)
 			clearTimeout(dragUpdateTimeout);
 			dragUpdateTimeout = setTimeout(() => {
 				try {
-					circuitStore.updateNodePosition(node.id, position);
-
-					// Broadcast to collaborators if in collaborative mode
 					if (isCollaborative && !isReadOnlyMode) {
 						broadcastNodeMovement(node.id, position);
 					}
 				} catch (error) {
-					console.warn('Error updating node position during drag:', error);
+					console.warn('Error broadcasting position during drag:', error);
 				}
-			}, 50); // Faster updates for better real-time feel
+			}, 100);
 		} catch (error) {
 			console.error('Error in onNodeDrag:', error);
 		}
@@ -460,6 +621,8 @@
 
 	function onNodeDragStart(params: any) {
 		try {
+			isDragging = true;
+			
 			// Enhanced cursor state tracking
 			if (isCollaborative && params.node?.id) {
 				updateCursorAction('dragging', params.node.id);
@@ -486,14 +649,25 @@
 				position.x = Math.max(-5000, Math.min(5000, position.x));
 				position.y = Math.max(-5000, Math.min(5000, position.y));
 
-				// Update store with final position
-				circuitStore.updateNodePosition(node.id, position);
+				console.log('[EDITOR] Drag stopped, final position:', {
+					nodeId: node.id,
+					position
+				});
+
+				// Update local node position
+				const nodeIndex = nodes.findIndex(n => n.id === node.id);
+				if (nodeIndex !== -1) {
+					nodes[nodeIndex] = { ...nodes[nodeIndex], position };
+				}
 
 				// Broadcast final position to collaborators
 				if (isCollaborative && !isReadOnlyMode) {
 					broadcastNodeMovement(node.id, position);
 				}
 			}
+
+			// Reset drag state - this will allow store sync to resume
+			isDragging = false;
 
 			// Reset cursor action
 			if (isCollaborative) {
@@ -504,12 +678,7 @@
 		}
 	}
 
-	// Function to sync all current node positions to the store
-	function syncAllPositionsToStore() {
-		nodes.forEach((node) => {
-			circuitStore.updateNodePosition(node.id, node.position);
-		});
-	}
+
 
 	function onDragOver(event: DragEvent) {
 		event.preventDefault();
@@ -554,6 +723,12 @@
 			// Enhanced position calculation with multiple fallbacks
 			let position = { x: 100, y: 100 }; // Safe default
 
+			console.log('[EDITOR] Drop event details:', {
+				clientX: event.clientX,
+				clientY: event.clientY,
+				hasSvelteFlowInstance: !!svelteFlowInstance
+			});
+
 			if (svelteFlowInstance) {
 				try {
 					const canvasPosition = svelteFlowInstance.screenToFlowPosition({
@@ -561,12 +736,15 @@
 						y: event.clientY
 					});
 
+					console.log('[EDITOR] Calculated canvas position:', canvasPosition);
+
 					// Validate the calculated position
 					if (isFinite(canvasPosition.x) && isFinite(canvasPosition.y)) {
 						position = {
 							x: Math.max(-5000, Math.min(5000, canvasPosition.x)),
 							y: Math.max(-5000, Math.min(5000, canvasPosition.y))
 						};
+						console.log('[EDITOR] Final drop position:', position);
 					}
 				} catch (positionError) {
 					console.warn('Error calculating drop position, using fallback:', positionError);
@@ -575,6 +753,7 @@
 						x: Math.max(0, event.clientX - 200),
 						y: Math.max(0, event.clientY - 100)
 					};
+					console.log('[EDITOR] Fallback position:', position);
 				}
 			}
 
@@ -584,23 +763,44 @@
 
 			// Add component with enhanced error handling
 			try {
-				const actualId = circuitStore.addComponent(componentType, position, componentId);
+				// Add component directly to local state
+				const newNode = {
+					id: componentId,
+					type: componentType,
+					position: {
+						x: Math.round(position.x / 10) * 10,
+						y: Math.round(position.y / 10) * 10
+					},
+					data: {
+						label: componentType,
+						parameters: getDefaultParameters(componentType)
+					}
+				};
+				
+				nodes = [...nodes, newNode];
+				console.log('[EDITOR] Component added:', { type: componentType, id: componentId, position });
 
 				// Broadcast to collaborators with retry logic
 				if (isCollaborative && !isReadOnlyMode) {
-					const finalId = actualId || componentId;
 					setTimeout(() => {
 						// Small delay to ensure local state is updated first
-						broadcastComponentAdded(componentType, position, finalId);
+						broadcastComponentAdded(componentType, position, componentId);
 					}, 10);
 				}
-
-				console.log(`Successfully added ${componentType} at position:`, position);
 			} catch (addError) {
-				console.error('Error adding component to store:', addError);
+				console.error('Error adding component:', addError);
 				// Try with fallback position
 				const fallbackPosition = { x: 100 + Math.random() * 100, y: 100 + Math.random() * 100 };
-				circuitStore.addComponent(componentType, fallbackPosition, componentId);
+				const fallbackNode = {
+					id: componentId,
+					type: componentType,
+					position: fallbackPosition,
+					data: {
+						label: componentType,
+						parameters: getDefaultParameters(componentType)
+					}
+				};
+				nodes = [...nodes, fallbackNode];
 			}
 		} catch (error) {
 			console.error('Error in onDrop:', error);
@@ -648,10 +848,9 @@
 		}
 
 		// Clear the circuit
-		circuitStore.clear();
+		clearCircuit();
 		currentProjectId = null;
 		currentProjectName = 'Untitled Circuit';
-		hasUnsavedChanges = false;
 
 		// Remove project ID from URL
 		goto('/editor', { replaceState: true });
@@ -664,12 +863,14 @@
 
 	// Function to manually save changes for collaborative editing
 	async function saveChanges() {
-		if (!isCollaborative || isReadOnlyMode) return;
+		if (!isCollaborative || isReadOnlyMode || !currentProjectId) return;
 
 		isSaving = true;
 		try {
-			await circuitStore.saveChanges();
-			hasUnsavedChanges = false;
+			const success = await circuitAPI.autoSave(currentProjectId, nodes, edges);
+			if (success) {
+				hasUnsavedChanges = false;
+			}
 		} catch (error) {
 			console.error('Error saving changes:', error);
 		} finally {
@@ -679,14 +880,17 @@
 
 	async function loadProject(projectId: string) {
 		try {
-			const result = await circuitStore.loadCircuit(projectId);
+			const result = await circuitAPI.loadCircuit(projectId);
 			if (result.success) {
+				// Load circuit data into local state
+				nodes = result.nodes || [];
+				edges = result.edges || [];
+				
 				currentProjectId = projectId;
-				currentProjectName = result.name;
+				currentProjectName = result.name || 'Untitled Circuit';
 				hasUnsavedChanges = false;
 
 				// Enable collaboration for this project
-				circuitStore.enableCollaboration(projectId);
 				isCollaborative = true;
 
 				// Check if user has edit rights
@@ -748,34 +952,20 @@
 		}
 	}
 
-	onMount(() => {
-		// Check if we have a project ID in the URL
-		const urlParams = new URLSearchParams(window.location.search);
-		const projectId = urlParams.get('project');
 
-		if (projectId) {
-			// Load the project
-			currentProjectId = projectId;
-			loadProject(projectId);
-		}
-
-		// Set up auto-save interval for collaborative editing
-		autoSaveInterval = setInterval(() => {
-			if (isCollaborative && !isReadOnlyMode && $circuitStore.pendingChanges) {
-				saveChanges();
-			}
-		}, 10000); // Auto-save every 10 seconds if changes
-	});
-
-	onDestroy(() => {
-		// Clean up collaboration features if needed
-	});
 </script>
 
 <svelte:head>
 	<title>Circuit Simulator - Saffron</title>
 </svelte:head>
-<DebugNodeMenu bind:isVisible={showDebugMenu} on:close={() => (showDebugMenu = false)} />
+<DebugNodeMenu 
+	bind:isVisible={showDebugMenu} 
+	{nodes} 
+	{edges} 
+	onExportJSON={exportJSON}
+	onLoadFromJson={loadFromJson}
+	on:close={() => (showDebugMenu = false)} 
+/>
 <div class="bg-background flex h-[calc(100vh-4rem)] w-full flex-col overflow-hidden">
 	<!-- Toolbar -->
 	<div
@@ -869,7 +1059,12 @@
 		class:colored-handles={$settingsStore.coloredHandles}
 	>
 		<!-- Left Sidebar - Components -->
-		<ComponentsSidebar />
+		<ComponentsSidebar 
+			{nodes} 
+			{edges} 
+			onAddComponent={addComponent}
+			onClearCircuit={clearCircuit}
+		/>
 
 		<!-- Main Canvas -->
 		<div
@@ -952,13 +1147,13 @@
 								{#if collaboratorCount > 0}
 									· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
 								{/if}
-								{#if isSaving}
-									<span class="text-chart-3 ml-1">· Saving...</span>
-								{:else if $circuitStore.throttledSave}
-									<span class="text-chart-3 ml-1">· Saving...</span>
-								{:else if $circuitStore.pendingChanges}
-									<span class="text-chart-3 ml-1">· Unsaved changes</span>
-								{/if}
+															{#if isSaving}
+								<span class="text-chart-3 ml-1">· Saving...</span>
+							{:else if isAutoSaving}
+								<span class="text-chart-3 ml-1">· Saving...</span>
+							{:else if hasUnsavedChanges}
+								<span class="text-chart-3 ml-1">· Unsaved changes</span>
+							{/if}
 							</span>
 						</div>
 					{:else}
@@ -989,11 +1184,25 @@
 		</div>
 
 		<!-- Right Sidebar - Properties & Analysis -->
-		<PropertiesSidebar bind:selectedNode bind:nodes />
+		<PropertiesSidebar 
+			bind:selectedNode 
+			bind:nodes 
+			{edges}
+			onUpdateComponent={updateComponent}
+			onRemoveComponent={removeComponent}
+			onAddComponent={addComponent}
+			onExportNetlist={exportNetlist}
+			onExportJSON={exportJSON}
+		/>
 	</div>
 
 	<!-- Wire Properties Panel (Modal) -->
-	<WirePropertiesPanel bind:selectedWire bind:edges onRefresh={forceRefreshWires} />
+	<WirePropertiesPanel 
+		bind:selectedWire 
+		bind:edges 
+		onUpdateWireStyle={updateWireStyle}
+		onRemoveConnection={removeConnection}
+	/>
 
 	<!-- Save Project Dialog -->
 	{#if showSaveDialog}
@@ -1001,6 +1210,8 @@
 			bind:show={showSaveDialog}
 			{currentProjectId}
 			currentName={currentProjectName}
+			{nodes}
+			{edges}
 			on:projectSaved={onProjectSaved}
 		/>
 	{/if}
@@ -1030,11 +1241,11 @@
 		color: hsl(var(--card-foreground));
 	}
 
-	:global(.svelte-flow .svelte-flow__edge) {
+	:global(.svelte-flow .svelte-flow__edge-path) {
 		stroke: hsl(var(--muted-foreground));
 	}
 
-	:global(.svelte-flow .svelte-flow__edge.selected) {
+	:global(.svelte-flow .svelte-flow__edge.selected .svelte-flow__edge-path) {
 		stroke: hsl(var(--primary));
 	}
 

@@ -2,13 +2,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import type { Edge } from '@xyflow/svelte';
-	import { circuitStore } from '../stores/circuit-store';
 
-	let { selectedWire = $bindable(), edges = $bindable(), onRefresh }: { 
-		selectedWire: Edge | null, 
-		edges: Edge[], 
-		onRefresh?: () => void 
-	} = $props();
+	interface Props {
+		selectedWire: Edge | null;
+		edges: Edge[];
+		onUpdateWireStyle: (edgeId: string, wireShape: string, wireStyle?: string, color?: string) => void;
+		onRemoveConnection: (edgeId: string) => void;
+	}
+
+	let { selectedWire = $bindable(), edges = $bindable(), onUpdateWireStyle, onRemoveConnection }: Props = $props();
 
 	const wireShapes = [
 		{ value: 'straight', label: 'Straight', icon: '─' },
@@ -33,31 +35,14 @@
 
 	function updateWireShape(shape: string) {
 		if (selectedWire) {
-			// Update the store first
-			circuitStore.updateWireStyle(selectedWire.id, shape);
+			console.log('[WirePropertiesPanel] Updating wire shape:', {
+				wireId: selectedWire.id,
+				oldShape: (selectedWire.data as any)?.wireShape,
+				newShape: shape
+			});
 			
-			// Force immediate update of local edges array
-			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
-			if (edgeIndex !== -1) {
-				edges[edgeIndex] = {
-					...edges[edgeIndex],
-					data: {
-						...edges[edgeIndex].data,
-						wireShape: shape
-					}
-				};
-				// Trigger reactivity by creating new array
-				edges = [...edges];
-			}
-
-			// Update the selectedWire for immediate UI feedback in the panel
-			selectedWire = {
-				...selectedWire,
-				data: { ...selectedWire.data, wireShape: shape }
-			};
-
-			// Call refresh function if provided
-			onRefresh?.();
+			// Single update call to parent - let the parent handle all the reactivity
+			onUpdateWireStyle(selectedWire.id, shape);
 		}
 	}
 
@@ -65,35 +50,15 @@
 		if (selectedWire) {
 			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
 			
-			// Update the store first
-			circuitStore.updateWireStyle(
-				selectedWire.id,
-				currentShape,
-				style
-			);
+			console.log('[WirePropertiesPanel] Updating wire style:', {
+				wireId: selectedWire.id,
+				oldStyle: (selectedWire.data as any)?.wireStyle,
+				newStyle: style,
+				currentShape
+			});
 			
-			// Force immediate update of local edges array
-			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
-			if (edgeIndex !== -1) {
-				edges[edgeIndex] = {
-					...edges[edgeIndex],
-					data: {
-						...edges[edgeIndex].data,
-						wireStyle: style
-					}
-				};
-				// Trigger reactivity by creating new array
-				edges = [...edges];
-			}
-
-			// Update the selectedWire for immediate UI feedback in the panel
-			selectedWire = {
-				...selectedWire,
-				data: { ...selectedWire.data, wireStyle: style }
-			};
-
-			// Call refresh function if provided
-			onRefresh?.();
+			// Single update call to parent - let the parent handle all the reactivity
+			onUpdateWireStyle(selectedWire.id, currentShape, style);
 		}
 	}
 
@@ -102,43 +67,23 @@
 			const currentShape = (selectedWire.data as any)?.wireShape || 'straight';
 			const currentStyle = (selectedWire.data as any)?.wireStyle || 'solid';
 			
-			// Update the store first
-			circuitStore.updateWireStyle(
-				selectedWire.id,
+			console.log('[WirePropertiesPanel] Updating wire color:', {
+				wireId: selectedWire.id,
+				oldColor: (selectedWire.data as any)?.color,
+				newColor: color,
 				currentShape,
-				currentStyle,
-				color
-			);
+				currentStyle
+			});
 			
-			// Force immediate update of local edges array
-			const edgeIndex = edges.findIndex(edge => edge.id === selectedWire?.id);
-			if (edgeIndex !== -1) {
-				edges[edgeIndex] = {
-					...edges[edgeIndex],
-					data: {
-						...edges[edgeIndex].data,
-						color: color
-					}
-				};
-				// Trigger reactivity by creating new array
-				edges = [...edges];
-			}
-
-			// Update the selectedWire for immediate UI feedback in the panel
-			selectedWire = {
-				...selectedWire,
-				data: { ...selectedWire.data, color: color }
-			};
+			// Single update call to parent - let the parent handle all the reactivity
+			onUpdateWireStyle(selectedWire.id, currentShape, currentStyle, color);
 		}
 	}
 
 	function deleteWire() {
 		if (selectedWire) {
-			// Update the store
-			circuitStore.removeConnection(selectedWire.id);
-			
-			// Update the local edges array directly for immediate visual feedback
-			edges = edges.filter(edge => edge.id !== selectedWire?.id);
+			// Let the parent handle the removal
+			onRemoveConnection(selectedWire.id);
 			
 			// Clear the selection
 			selectedWire = null;
