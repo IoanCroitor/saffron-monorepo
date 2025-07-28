@@ -68,6 +68,10 @@ let currentProjectId: string | null = null;
 let currentUserId: string | null = null;
 let collaborationCallbacks: CollaborationCallbacks = {};
 
+// Track local deletions to avoid processing them twice
+let localDeletions = new Set<string>();
+let localEdgeDeletions = new Set<string>();
+
 // Throttling for cursor updates
 let cursorUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
 const CURSOR_DEBOUNCE_TIME = YJS_CONFIG.cursorDebounceTime;
@@ -127,10 +131,19 @@ export async function initCollaboration(
 		return new Promise<(() => void) | null>((resolve) => {
 			if (provider) {
 				provider.on('status', (event: any) => {
+					console.log('[COLLABORATION] 🔌 YJS connection status:', event.status);
 					connectionState.set(event.status === 'connected' ? 'connected' : 'disconnected');
 					
 					if (event.status === 'connected') {
-						console.log('Yjs collaboration connected for project:', projectId);
+						console.log('[COLLABORATION] ✅ Yjs collaboration connected for project:', projectId);
+						
+						// Test the connection by checking if maps are accessible
+						if (nodesMap && edgesMap) {
+							console.log('[COLLABORATION] ✅ YJS maps are accessible:', {
+								nodesMapSize: nodesMap.size,
+								edgesMapSize: edgesMap.size
+							});
+						}
 						
 						// Don't load state from YJS on connection - let Supabase handle initial state
 						// YJS will only handle real-time changes from this point forward
@@ -138,10 +151,15 @@ export async function initCollaboration(
 						resolve(() => cleanupCollaboration());
 					}
 				});
+				
+				// Add error handling
+				provider.on('connection-error', (error: any) => {
+					console.error('[COLLABORATION] ❌ YJS provider error:', error);
+				});
 			} else {
 				// Fallback if provider is not available
 				connectionState.set('connected');
-				console.log('Yjs collaboration initialized for project:', projectId);
+				console.log('[COLLABORATION] ⚠️ Yjs collaboration initialized without provider for project:', projectId);
 				resolve(() => cleanupCollaboration());
 			}
 		});
@@ -162,7 +180,8 @@ function setupEventListeners() {
 		console.log('[COLLABORATION] 🔍 Node observe event:', {
 			changesCount: event.changes.keys.size,
 			currentUserId,
-			event: event.changes.keys
+			event: event.changes.keys,
+			hasChanges: event.changes.keys.size > 0
 		});
 		
 		event.changes.keys.forEach((change, key) => {
@@ -176,7 +195,32 @@ function setupEventListeners() {
 				isFromOtherUser: nodeData && nodeData.userId !== currentUserId
 			});
 			
-			// Only process changes from other users
+			// Handle deletions first (they don't have data)
+			if (change.action === 'delete') {
+				console.log('[COLLABORATION] 🔍 Node deletion detected:', { key, change });
+				
+				// Check if this is a local deletion that we initiated
+				if (localDeletions.has(key)) {
+					console.log('[COLLABORATION] ⏭️ Skipping deletion - this is a local deletion we initiated:', { key });
+					return;
+				}
+				
+				if (collaborationCallbacks.onNodeRemove) {
+					console.log('[COLLABORATION] ✅ Calling onNodeRemove callback');
+					try {
+						collaborationCallbacks.onNodeRemove(key);
+						console.log('[COLLABORATION] ✅ onNodeRemove callback completed successfully');
+					} catch (error) {
+						console.error('[COLLABORATION] ❌ Error in onNodeRemove callback:', error);
+					}
+				} else {
+					console.log('[COLLABORATION] ⚠️ No onNodeRemove callback registered');
+				}
+				console.log('[COLLABORATION] Component removed by collaborator:', key);
+				return;
+			}
+			
+			// Only process add/update changes from other users
 			if (nodeData && nodeData.userId !== currentUserId) {
 				if (change.action === 'add' || change.action === 'update') {
 					// Update from another user
@@ -188,11 +232,6 @@ function setupEventListeners() {
 						collaborationCallbacks.onNodeUpdate(key, nodeData);
 					}
 					console.log('[COLLABORATION] Node update from collaborator:', key, nodeData);
-				} else if (change.action === 'delete') {
-					if (collaborationCallbacks.onNodeRemove) {
-						collaborationCallbacks.onNodeRemove(key);
-					}
-					console.log('[COLLABORATION] Component removed by collaborator:', key);
 				}
 			} else {
 				console.log('[COLLABORATION] ⏭️ Skipping change from self or invalid data');
@@ -202,24 +241,62 @@ function setupEventListeners() {
 
 	// Listen for edge changes from other users only
 	edgesMap.observe((event) => {
+		console.log('[COLLABORATION] 🔍 Edge observe event:', {
+			changesCount: event.changes.keys.size,
+			currentUserId,
+			event: event.changes.keys,
+			hasChanges: event.changes.keys.size > 0
+		});
+		
 		event.changes.keys.forEach((change, key) => {
 			const edgeData = edgesMap!.get(key);
+			console.log('[COLLABORATION] 🔍 Processing edge change:', {
+				key,
+				action: change.action,
+				edgeData,
+				edgeDataUserId: edgeData?.userId,
+				currentUserId,
+				isFromOtherUser: edgeData && edgeData.userId !== currentUserId
+			});
 			
-			// Only process changes from other users
+			// Handle deletions first (they don't have data)
+			if (change.action === 'delete') {
+				console.log('[COLLABORATION] 🔍 Edge deletion detected:', { key, change });
+				
+				// Check if this is a local deletion that we initiated
+				if (localEdgeDeletions.has(key)) {
+					console.log('[COLLABORATION] ⏭️ Skipping edge deletion - this is a local deletion we initiated:', { key });
+					return;
+				}
+				
+				if (collaborationCallbacks.onEdgeRemove) {
+					console.log('[COLLABORATION] ✅ Calling onEdgeRemove callback');
+					try {
+						collaborationCallbacks.onEdgeRemove(key);
+						console.log('[COLLABORATION] ✅ onEdgeRemove callback completed successfully');
+					} catch (error) {
+						console.error('[COLLABORATION] ❌ Error in onEdgeRemove callback:', error);
+					}
+				} else {
+					console.log('[COLLABORATION] ⚠️ No onEdgeRemove callback registered');
+				}
+				console.log('[COLLABORATION] Edge removed by collaborator:', key);
+				return;
+			}
+			
+			// Only process add/update changes from other users
 			if (edgeData && edgeData.userId !== currentUserId) {
 				if (change.action === 'add' || change.action === 'update') {
 					// Update from another user
 					if (change.action === 'add' && collaborationCallbacks.onEdgeAdd) {
 						collaborationCallbacks.onEdgeAdd(key, edgeData);
 					} else if (change.action === 'update' && collaborationCallbacks.onEdgeUpdate) {
-						collaborationCallbacks.onEdgeUpdate(key, edgeData);
+						// For property updates, pass only the data property
+						const propertyData = edgeData.data || {};
+						console.log('[COLLABORATION] 🔍 Edge property update detected:', { key, propertyData });
+						collaborationCallbacks.onEdgeUpdate(key, propertyData);
 					}
 					console.log('[COLLABORATION] Edge update from collaborator:', key, edgeData);
-				} else if (change.action === 'delete') {
-					if (collaborationCallbacks.onEdgeRemove) {
-						collaborationCallbacks.onEdgeRemove(key);
-					}
-					console.log('[COLLABORATION] Edge removed by collaborator:', key);
 				}
 			}
 		});
@@ -295,9 +372,39 @@ export function broadcastComponentAdded(
  * @param id Component ID
  */
 export function broadcastComponentRemoved(id: string) {
-	if (!nodesMap) return;
+	console.log('[COLLABORATION] 🚀 broadcastComponentRemoved called:', { id, nodesMap: !!nodesMap, currentUserId });
+	
+	if (!nodesMap || !currentUserId) {
+		console.log('[COLLABORATION] ❌ Cannot broadcast removal - missing nodesMap or currentUserId');
+		return;
+	}
 
-	nodesMap.delete(id);
+	try {
+		// Track this as a local deletion
+		localDeletions.add(id);
+		console.log('[COLLABORATION] 📝 Tracking local deletion:', { id, localDeletions: Array.from(localDeletions) });
+		
+		// Check if the node exists before deleting
+		const nodeExists = nodesMap.has(id);
+		console.log('[COLLABORATION] 🔍 Node exists in YJS before deletion:', { id, exists: nodeExists });
+		
+		// Delete the node from YJS
+		nodesMap.delete(id);
+		
+		// Verify deletion
+		const nodeStillExists = nodesMap.has(id);
+		console.log('[COLLABORATION] 🔍 Node exists in YJS after deletion:', { id, exists: nodeStillExists });
+		
+		console.log('[COLLABORATION] ✅ Broadcasting component removal:', { id, wasDeleted: !nodeStillExists });
+		
+		// Clean up the tracking after a short delay
+		setTimeout(() => {
+			localDeletions.delete(id);
+			console.log('[COLLABORATION] 🧹 Cleaned up local deletion tracking:', { id, localDeletions: Array.from(localDeletions) });
+		}, 1000);
+	} catch (error) {
+		console.error('[COLLABORATION] ❌ Error broadcasting component removal:', error);
+	}
 }
 
 /**
@@ -356,13 +463,81 @@ export function broadcastConnectionAdded(edge: any) {
 }
 
 /**
+ * Broadcast edge property updates
+ * @param edgeId The edge ID
+ * @param data The updated edge data/properties
+ */
+export function broadcastEdgeProperties(edgeId: string, data: any) {
+	console.log('[COLLABORATION] 🚀 broadcastEdgeProperties called:', { edgeId, data, edgesMap: !!edgesMap, currentUserId });
+	
+	if (!edgesMap || !currentUserId) {
+		console.log('[COLLABORATION] ❌ Cannot broadcast edge properties - missing edgesMap or currentUserId');
+		return;
+	}
+
+	// Get existing edge data
+	const existingData = edgesMap.get(edgeId);
+	console.log('[COLLABORATION] 📦 Existing edge data for properties:', existingData);
+	
+	// Use safe serialization to avoid Svelte proxy issues
+	const edgeData = safeSerialize({
+		id: edgeId,
+		data,
+		userId: currentUserId,
+		timestamp: Date.now(),
+		// Preserve existing edge properties if available
+		...(existingData && { 
+			source: existingData.source,
+			target: existingData.target,
+			sourceHandle: existingData.sourceHandle,
+			targetHandle: existingData.targetHandle,
+			type: existingData.type
+		})
+	});
+
+	console.log('[COLLABORATION] 📤 Setting edge properties in YJS:', edgeData);
+	edgesMap.set(edgeId, edgeData);
+	console.log('[COLLABORATION] ✅ Broadcasting edge properties:', { edgeId, data });
+}
+
+/**
  * Broadcast connection removal
  * @param edgeId The edge ID being removed
  */
 export function broadcastConnectionRemoved(edgeId: string) {
-	if (!edgesMap) return;
+	console.log('[COLLABORATION] 🚀 broadcastConnectionRemoved called:', { edgeId, edgesMap: !!edgesMap, currentUserId });
+	
+	if (!edgesMap || !currentUserId) {
+		console.log('[COLLABORATION] ❌ Cannot broadcast connection removal - missing edgesMap or currentUserId');
+		return;
+	}
 
-	edgesMap.delete(edgeId);
+	try {
+		// Track this as a local deletion
+		localEdgeDeletions.add(edgeId);
+		console.log('[COLLABORATION] 📝 Tracking local edge deletion:', { edgeId, localEdgeDeletions: Array.from(localEdgeDeletions) });
+		
+		// Check if the edge exists before deleting
+		const edgeExists = edgesMap.has(edgeId);
+		console.log('[COLLABORATION] 🔍 Edge exists in YJS before deletion:', { edgeId, exists: edgeExists });
+		
+		// Delete the edge from YJS
+		edgesMap.delete(edgeId);
+		
+		// Verify deletion
+		const edgeStillExists = edgesMap.has(edgeId);
+		console.log('[COLLABORATION] 🔍 Edge exists in YJS after deletion:', { edgeId, exists: edgeStillExists });
+		
+		console.log('[COLLABORATION] ✅ Broadcasting connection removal:', { edgeId, wasDeleted: !edgeStillExists });
+		
+		// Clean up the tracking after a short delay
+		setTimeout(() => {
+			localEdgeDeletions.delete(edgeId);
+			console.log('[COLLABORATION] 🧹 Cleaned up local edge deletion tracking:', { edgeId, localEdgeDeletions: Array.from(localEdgeDeletions) });
+		}, 1000);
+	} catch (error) {
+		console.error('[COLLABORATION] ❌ Error broadcasting connection removal:', error);
+	}
 }
 
 /**
@@ -412,6 +587,10 @@ export async function cleanupCollaboration() {
 	// Removed cursorsMap
 	currentProjectId = null;
 	currentUserId = null;
+
+	// Clear tracking sets
+	localDeletions.clear();
+	localEdgeDeletions.clear();
 
 	// Clear stores
 	activeCollaborators.set({});

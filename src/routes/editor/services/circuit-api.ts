@@ -35,7 +35,8 @@ class CircuitAPI {
 				id: edge.id,
 				source: edge.source,
 				target: edge.target,
-				type: edge.type
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
 			}));
 
 			const schematicData: CircuitData = {
@@ -87,7 +88,8 @@ class CircuitAPI {
 				id: edge.id,
 				source: edge.source,
 				target: edge.target,
-				type: edge.type
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
 			}));
 
 			const schematicData: CircuitData = {
@@ -176,7 +178,8 @@ class CircuitAPI {
 				id: edge.id,
 				source: edge.source,
 				target: edge.target,
-				type: edge.type
+				type: edge.type,
+				data: edge.data // Preserve edge properties like wire shape and color
 			}));
 
 			const schematicData: CircuitData = {

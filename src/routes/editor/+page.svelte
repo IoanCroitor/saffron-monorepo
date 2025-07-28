@@ -40,6 +40,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	let session = $derived($page.data.session);
 	let user = $derived($page.data.user);
 	import {
@@ -51,6 +52,7 @@
 		broadcastComponentRemoved,
 		broadcastConnectionAdded,
 		broadcastConnectionRemoved,
+		broadcastEdgeProperties,
 		generateComponentId
 	} from './services/collaboration';
 	// Removed CollaborativeCursors - now using SvelteFlow cursor nodes
@@ -336,16 +338,39 @@
 	}
 
 	function removeComponent(id: string) {
+		console.log('[EDITOR] 🚀 removeComponent called:', { id, isCollaborative, isReadOnlyMode });
+		
+		// Clear selection if this node is selected
+		if (selectedNode?.id === id) {
+			selectedNode = null;
+			console.log('[EDITOR] ✅ Cleared selected node');
+		}
+		
+		// Find connected edges before removing them
+		const connectedEdges = edges.filter(edge => edge.source === id || edge.target === id);
+		console.log('[EDITOR] 🔍 Found connected edges to remove:', connectedEdges.map(e => e.id));
+		
 		// Remove node and connected edges
 		nodes = nodes.filter(node => node.id !== id);
 		edges = edges.filter(edge => edge.source !== id && edge.target !== id);
 		
+		console.log('[EDITOR] ✅ Removed node and connected edges locally');
+		
 		// Broadcast component removal to collaborators
 		if (isCollaborative && !isReadOnlyMode) {
+			console.log('[EDITOR] 📤 Broadcasting component removal to collaborators');
 			broadcastComponentRemoved(id);
+			
+			// Also broadcast removal of connected edges
+			connectedEdges.forEach(edge => {
+				console.log('[EDITOR] 📤 Broadcasting connected edge removal:', edge.id);
+				broadcastConnectionRemoved(edge.id);
+			});
+		} else {
+			console.log('[EDITOR] ⏭️ Not broadcasting - not collaborative or read-only');
 		}
 		
-		console.log('[EDITOR] Component removed:', { id });
+		console.log('[EDITOR] ✅ Component removal complete:', { id });
 	}
 
 	// Export functions for PropertiesSidebar
@@ -428,6 +453,14 @@
 				selectedWire = updatedEdge;
 			}
 			
+			// Broadcast edge property update to collaborators
+			if (isCollaborative && !isReadOnlyMode) {
+				console.log('[EDITOR] 📤 Broadcasting edge properties to collaborators');
+				broadcastEdgeProperties(edgeId, updatedEdge.data);
+			} else {
+				console.log('[EDITOR] ⏭️ Not broadcasting edge properties - not collaborative or read-only');
+			}
+			
 			console.log('[EDITOR] Wire style updated successfully');
 		} else {
 			console.warn('[EDITOR] Edge not found:', edgeId);
@@ -487,21 +520,14 @@
 			} else if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
 				// Only delete components if not typing in an input field
 				if (selectedWire) {
-					// Remove edge from local state
-					edges = edges.filter(edge => edge.id !== selectedWire!.id);
+					console.log('[EDITOR] 🗑️ Keyboard deletion of wire:', selectedWire.id);
+					// Use the centralized removeConnection function for consistency
+					removeConnection(selectedWire.id);
 					selectedWire = null;
 				} else if (selectedNode) {
-					const nodeId = selectedNode.id;
-					// Remove node and connected edges from local state
-					nodes = nodes.filter(node => node.id !== nodeId);
-					edges = edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
-
-					// Broadcast component removal to collaborators
-					if (isCollaborative && !isReadOnlyMode) {
-						broadcastComponentRemoved(nodeId);
-					}
-
-					selectedNode = null;
+					console.log('[EDITOR] 🗑️ Keyboard deletion of node:', selectedNode.id);
+					// Use the centralized removeComponent function for consistency
+					removeComponent(selectedNode.id);
 				}
 			} else if (event.ctrlKey || event.metaKey) {
 				// Handle Ctrl/Cmd shortcuts
@@ -524,6 +550,30 @@
 			document.removeEventListener('keydown', handleKeyDown);
 		};
 	});
+
+	// Add test functions to global scope for debugging
+	if (browser) {
+		(window as any).testDeletion = async () => {
+			console.log('🧪 Testing deletion from editor...');
+			if (nodes.length > 0) {
+				const firstNode = nodes[0];
+				console.log('🗑️ Deleting first node:', firstNode.id);
+				removeComponent(firstNode.id);
+			} else {
+				console.log('❌ No nodes to delete');
+			}
+		};
+		
+		(window as any).testCollaboration = async () => {
+			console.log('🧪 Testing collaboration...');
+			console.log('Current state:', {
+				isCollaborative,
+				isReadOnlyMode,
+				nodesCount: nodes.length,
+				edgesCount: edges.length
+			});
+		};
+	}
 
 	// Initialize collaboration when project ID is available
 	$effect(() => {
@@ -584,8 +634,33 @@
 						nodes = [...nodes, newNode];
 					},
 					onNodeRemove: (nodeId: string) => {
-						// Remove node from collaborator
-						nodes = nodes.filter(n => n.id !== nodeId);
+						console.log('[EDITOR] 🎯 onNodeRemove callback called:', { nodeId });
+						
+						try {
+							// Clear selection if this node is selected
+							if (selectedNode?.id === nodeId) {
+								selectedNode = null;
+								console.log('[EDITOR] ✅ Cleared selected node from collaborator removal');
+							}
+							
+							// Remove node and connected edges from collaborator
+							const beforeNodes = nodes.length;
+							const beforeEdges = edges.length;
+							
+							nodes = nodes.filter(n => n.id !== nodeId);
+							edges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+							
+							const afterNodes = nodes.length;
+							const afterEdges = edges.length;
+							
+							console.log('[EDITOR] ✅ Node removed from collaborator:', { 
+								nodeId, 
+								nodesRemoved: beforeNodes - afterNodes,
+								edgesRemoved: beforeEdges - afterEdges
+							});
+						} catch (error) {
+							console.error('[EDITOR] ❌ Error in onNodeRemove callback:', error);
+						}
 					},
 					onEdgeAdd: (edgeId: string, edgeData: any) => {
 						// Add edge from collaborator
@@ -600,9 +675,58 @@
 						};
 						edges = [...edges, newEdge];
 					},
+					onEdgeUpdate: (edgeId: string, edgeData: any) => {
+						console.log('[EDITOR] 🎯 onEdgeUpdate callback called:', { edgeId, edgeData });
+						
+						// Update edge from collaborator
+						const edgeIndex = edges.findIndex(e => e.id === edgeId);
+						if (edgeIndex !== -1) {
+							const oldData = edges[edgeIndex].data || {};
+							console.log('[EDITOR] 📦 Old edge data:', oldData);
+							console.log('[EDITOR] 📦 New edge data to merge:', edgeData);
+							
+							const updatedEdge = {
+								...edges[edgeIndex],
+								data: { ...oldData, ...edgeData }
+							};
+							
+							console.log('[EDITOR] 📦 Updated edge data:', updatedEdge.data);
+							
+							edges[edgeIndex] = updatedEdge;
+							edges = [...edges]; // Trigger reactivity
+							
+							// Update selectedWire if it's the same edge
+							if (selectedWire?.id === edgeId) {
+								selectedWire = updatedEdge;
+							}
+							
+							console.log('[EDITOR] ✅ Edge updated from collaborator:', { edgeId, updates: edgeData });
+						} else {
+							console.log('[EDITOR] ❌ Edge not found:', edgeId);
+						}
+					},
 					onEdgeRemove: (edgeId: string) => {
-						// Remove edge from collaborator
-						edges = edges.filter(e => e.id !== edgeId);
+						console.log('[EDITOR] 🎯 onEdgeRemove callback called:', { edgeId });
+						
+						try {
+							// Clear selection if this edge is selected
+							if (selectedWire?.id === edgeId) {
+								selectedWire = null;
+								console.log('[EDITOR] ✅ Cleared selected wire from collaborator removal');
+							}
+							
+							// Remove edge from collaborator
+							const beforeEdges = edges.length;
+							edges = edges.filter(e => e.id !== edgeId);
+							const afterEdges = edges.length;
+							
+							console.log('[EDITOR] ✅ Edge removed from collaborator:', { 
+								edgeId, 
+								edgesRemoved: beforeEdges - afterEdges
+							});
+						} catch (error) {
+							console.error('[EDITOR] ❌ Error in onEdgeRemove callback:', error);
+						}
 					},
 					// No onStateLoad - we don't want YJS to override database state
 					// Removed cursor callbacks - too complex
