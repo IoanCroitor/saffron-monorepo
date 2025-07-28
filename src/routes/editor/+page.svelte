@@ -29,6 +29,7 @@
 	import VoltmeterNode from './components/nodes/VoltmeterNode.svelte';
 	import AmmeterNode from './components/nodes/AmmeterNode.svelte';
 	import ProbeNode from './components/nodes/ProbeNode.svelte';
+	import CursorNode from './components/nodes/CursorNode.svelte';
 	import WireEdge from './components/edges/WireEdge.svelte';
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
 	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
@@ -43,16 +44,16 @@
 	let user = $derived($page.data.user);
 	import {
 		initCollaboration,
-		hasEditRights,
 		broadcastNodeMovement,
 		updateCursorAction,
+		updateCursorPosition,
 		broadcastComponentAdded,
 		broadcastComponentRemoved,
 		broadcastConnectionAdded,
 		broadcastConnectionRemoved,
 		generateComponentId
 	} from './services/collaboration';
-	import CollaborativeCursors from './components/CollaborativeCursors.svelte';
+	// Removed CollaborativeCursors - now using SvelteFlow cursor nodes
 
 	import '@xyflow/svelte/dist/style.css';
 
@@ -156,7 +157,8 @@
 		opamp: OpAmpNode,
 		voltmeter: VoltmeterNode,
 		ammeter: AmmeterNode,
-		probe: ProbeNode
+		probe: ProbeNode,
+		cursor: CursorNode
 	};
 
 	const edgeTypes: EdgeTypes = {
@@ -518,16 +520,96 @@
 
 			// Initialize real-time collaboration asynchronously
 			(async () => {
-				// Check for edit permissions
-				const canEdit = await hasEditRights(currentProjectId);
-				isReadOnlyMode = !canEdit;
+				// Since we're using direct YJS collaboration, everyone has edit rights
+				isReadOnlyMode = false;
 
-				// Initialize real-time collaboration
+				// Initialize real-time collaboration with callbacks
 				if (collaborationCleanupFn) {
 					collaborationCleanupFn();
 				}
 
-				collaborationCleanupFn = (await initCollaboration(currentProjectId)) || null;
+				// Define collaboration callbacks for handling updates from other users
+				const collaborationCallbacks = {
+					onNodeUpdate: (nodeId: string, nodeData: any) => {
+						// Update node position from collaborator
+						const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+						if (nodeIndex !== -1) {
+							nodes[nodeIndex] = { ...nodes[nodeIndex], position: nodeData.position };
+							nodes = [...nodes]; // Trigger reactivity
+						}
+					},
+					onNodeAdd: (nodeId: string, nodeData: any) => {
+						// Add node from collaborator
+						const newNode = {
+							id: nodeId,
+							type: nodeData.type,
+							position: nodeData.position,
+							data: nodeData.data
+						};
+						nodes = [...nodes, newNode];
+					},
+					onNodeRemove: (nodeId: string) => {
+						// Remove node from collaborator
+						nodes = nodes.filter(n => n.id !== nodeId);
+					},
+					onEdgeAdd: (edgeId: string, edgeData: any) => {
+						// Add edge from collaborator
+						const newEdge = {
+							id: edgeId,
+							source: edgeData.source,
+							target: edgeData.target,
+							sourceHandle: edgeData.sourceHandle,
+							targetHandle: edgeData.targetHandle,
+							type: 'wire',
+							data: edgeData.data
+						};
+						edges = [...edges, newEdge];
+					},
+					onEdgeRemove: (edgeId: string) => {
+						// Remove edge from collaborator
+						edges = edges.filter(e => e.id !== edgeId);
+					},
+					// No onStateLoad - we don't want YJS to override database state
+					onCursorUpdate: (cursorId: string, cursorData: any) => {
+						// Update or add cursor node
+						const cursorNode = {
+							id: `cursor-${cursorId}`,
+							type: 'cursor',
+							position: cursorData.position,
+							data: {
+								userId: cursorId,
+								name: cursorData.name,
+								color: cursorData.color,
+								action: cursorData.action,
+								nodeId: cursorData.nodeId,
+								lastUpdated: cursorData.timestamp
+							}
+						};
+
+						const existingIndex = nodes.findIndex(n => n.id === `cursor-${cursorId}`);
+						if (existingIndex !== -1) {
+							nodes[existingIndex] = cursorNode;
+							nodes = [...nodes]; // Trigger reactivity
+						} else {
+							nodes = [...nodes, cursorNode];
+						}
+					},
+					onCursorRemove: (cursorId: string) => {
+						// Remove cursor node
+						nodes = nodes.filter(n => n.id !== `cursor-${cursorId}`);
+					}
+				};
+
+				const cleanupFn = await initCollaboration(
+					currentProjectId, 
+					session?.user?.id, 
+					session?.user?.email,
+					collaborationCallbacks
+				);
+				collaborationCleanupFn = cleanupFn || null;
+
+				// YJS will only handle real-time changes from this point forward
+				// No need to sync database state to YJS
 			})();
 		} else {
 			// Disable collaboration when no project is loaded
@@ -710,6 +792,20 @@
 		} catch (error) {
 			console.error('Error in onNodeDragStop:', error);
 		}
+	}
+
+	// Cursor tracking using SvelteFlow coordinates
+	function onPaneMouseMove(event: any) {
+		if (!isCollaborative || !svelteFlowInstance) return;
+
+		// Get the position in SvelteFlow coordinates (handles zoom and pan)
+		const position = svelteFlowInstance.screenToFlowPosition({
+			x: event.clientX,
+			y: event.clientY
+		});
+
+		// Update cursor position
+		updateCursorPosition(position);
 	}
 
 
@@ -933,14 +1029,15 @@
 				// Enable collaboration for this project
 				isCollaborative = true;
 
-				// Check if user has edit rights
-				const canEdit = await hasEditRights(projectId);
-				isReadOnlyMode = !canEdit;
+				// Since we're using direct YJS collaboration, everyone has edit rights
+				isReadOnlyMode = false;
 
 				// Update URL with project ID
 				const url = new URL(window.location.toString());
 				url.searchParams.set('id', projectId);
 				history.replaceState({}, '', url.toString());
+
+				// YJS will handle real-time changes, no need to sync database state
 			} else {
 				alert(`Failed to load project: ${result.error}`);
 			}
@@ -989,9 +1086,7 @@
 			// Load the project
 			await loadProject(projectId);
 
-			// Initialize collaboration
-			await initCollaboration(projectId);
-
+			// Collaboration will be initialized automatically when currentProjectId is set
 			console.log('Successfully joined collaborative session:', projectId);
 		} catch (error) {
 			console.error('Failed to join collaboration:', error);
@@ -1132,6 +1227,7 @@
 				snapGrid={[10, 10]}
 				onnodeclick={onNodeClick}
 				onpaneclick={onPaneClick}
+				onmousemove={onPaneMouseMove}
 				onconnect={onConnect}
 				onnodedrag={onNodeDrag}
 				onnodedragstart={onNodeDragStart}
@@ -1227,10 +1323,7 @@
 					</div>
 				{/if}
 
-				<!-- Collaborative Cursors -->
-				{#if isCollaborative}
-					<CollaborativeCursors />
-				{/if}
+				<!-- Collaborative cursors are now handled as SvelteFlow nodes -->
 			</SvelteFlow>
 
 

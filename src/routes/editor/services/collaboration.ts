@@ -1,9 +1,7 @@
 import { writable } from 'svelte/store';
 import { get } from 'svelte/store';
 import { browser } from '$app/environment';
-// Circuit store removed - collaboration now works with external state management
 import { getRandomColor, getUserColor } from '$lib/utils/color-utils';
-import { createSupabaseBrowserClient } from '$lib/supabase';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { YJS_CONFIG } from './collaboration-config';
@@ -37,6 +35,18 @@ export interface UserCursor {
 	selectedNodeIds?: string[];
 }
 
+// Callback types for collaboration updates
+export interface CollaborationCallbacks {
+	onNodeUpdate?: (nodeId: string, nodeData: any) => void;
+	onNodeAdd?: (nodeId: string, nodeData: any) => void;
+	onNodeRemove?: (nodeId: string) => void;
+	onEdgeUpdate?: (edgeId: string, edgeData: any) => void;
+	onEdgeAdd?: (edgeId: string, edgeData: any) => void;
+	onEdgeRemove?: (edgeId: string) => void;
+	onCursorUpdate?: (cursorId: string, cursorData: any) => void;
+	onCursorRemove?: (cursorId: string) => void;
+}
+
 // Stores for collaboration state
 export const activeCollaborators = writable<Record<string, UserCursor>>({});
 export const connectionState = writable<'connected' | 'connecting' | 'disconnected' | 'error'>(
@@ -54,9 +64,10 @@ let ydoc: Y.Doc | null = null;
 let provider: WebsocketProvider | null = null;
 let nodesMap: Y.Map<any> | null = null;
 let edgesMap: Y.Map<any> | null = null;
-let awarenessMap: Y.Map<any> | null = null;
+let cursorsMap: Y.Map<any> | null = null;
 let currentProjectId: string | null = null;
 let currentUserId: string | null = null;
+let collaborationCallbacks: CollaborationCallbacks = {};
 
 // Throttling for cursor updates
 let cursorUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -67,8 +78,14 @@ const CURSOR_DEBOUNCE_TIME = YJS_CONFIG.cursorDebounceTime;
  * @param projectId The project ID to collaborate on
  * @param userId The current user ID
  * @param userName The current user name
+ * @param callbacks Callback functions for handling collaboration updates
  */
-export async function initCollaboration(projectId: string, userId?: string, userName?: string) {
+export async function initCollaboration(
+	projectId: string, 
+	userId?: string, 
+	userName?: string,
+	callbacks: CollaborationCallbacks = {}
+) {
 	if (!browser) return;
 
 	try {
@@ -79,6 +96,7 @@ export async function initCollaboration(projectId: string, userId?: string, user
 
 		currentProjectId = projectId;
 		currentUserId = userId || generateUserId();
+		collaborationCallbacks = callbacks;
 
 		// Update user info
 		userCollabInfo.update((info) => ({
@@ -89,12 +107,12 @@ export async function initCollaboration(projectId: string, userId?: string, user
 		// Create Yjs document
 		ydoc = new Y.Doc();
 
-		// Get shared maps for nodes, edges, and awareness
+		// Get shared maps for nodes, edges, and cursors
 		nodesMap = ydoc.getMap('nodes');
 		edgesMap = ydoc.getMap('edges');
-		awarenessMap = ydoc.getMap('awareness');
+		cursorsMap = ydoc.getMap('cursors');
 
-		// Create WebSocket provider to connect to your Docker Yjs server
+		// Create WebSocket provider to connect to your Yjs server
 		provider = new WebsocketProvider(
 			YJS_CONFIG.wsUrl,
 			`${YJS_CONFIG.roomPrefix}-${projectId}`,
@@ -109,10 +127,28 @@ export async function initCollaboration(projectId: string, userId?: string, user
 			setupCursorTracking();
 		}
 
-		connectionState.set('connected');
-		console.log('Yjs collaboration initialized for project:', projectId);
-
-		return () => cleanupCollaboration();
+		// Wait for connection to be established
+		return new Promise<(() => void) | null>((resolve) => {
+			if (provider) {
+				provider.on('status', (event: any) => {
+					connectionState.set(event.status === 'connected' ? 'connected' : 'disconnected');
+					
+					if (event.status === 'connected') {
+						console.log('Yjs collaboration connected for project:', projectId);
+						
+						// Don't load state from YJS on connection - let Supabase handle initial state
+						// YJS will only handle real-time changes from this point forward
+						
+						resolve(() => cleanupCollaboration());
+					}
+				});
+			} else {
+				// Fallback if provider is not available
+				connectionState.set('connected');
+				console.log('Yjs collaboration initialized for project:', projectId);
+				resolve(() => cleanupCollaboration());
+			}
+		});
 	} catch (error) {
 		console.error('Failed to initialize Yjs collaboration:', error);
 		connectionState.set('error');
@@ -123,72 +159,85 @@ export async function initCollaboration(projectId: string, userId?: string, user
  * Set up event listeners for Yjs changes
  */
 function setupEventListeners() {
-	if (!nodesMap || !edgesMap || !awarenessMap) return;
+	if (!nodesMap || !edgesMap || !cursorsMap) return;
 
-	// Listen for node changes
+	// Listen for node changes from other users only
 	nodesMap.observe((event) => {
 		event.changes.keys.forEach((change, key) => {
-			if (change.action === 'add' || change.action === 'update') {
-				const nodeData = nodesMap!.get(key);
-				if (nodeData && nodeData.userId !== currentUserId) {
-					// TODO: Update from another user - need to implement callback system
-					console.log('[COLLABORATION] Node update from collaborator:', key, nodeData.position);
+			const nodeData = nodesMap!.get(key);
+			
+			// Only process changes from other users
+			if (nodeData && nodeData.userId !== currentUserId) {
+				if (change.action === 'add' || change.action === 'update') {
+					// Update from another user
+					if (change.action === 'add' && collaborationCallbacks.onNodeAdd) {
+						collaborationCallbacks.onNodeAdd(key, nodeData);
+					} else if (change.action === 'update' && collaborationCallbacks.onNodeUpdate) {
+						collaborationCallbacks.onNodeUpdate(key, nodeData);
+					}
+					console.log('[COLLABORATION] Node update from collaborator:', key, nodeData);
+				} else if (change.action === 'delete') {
+					if (collaborationCallbacks.onNodeRemove) {
+						collaborationCallbacks.onNodeRemove(key);
+					}
+					console.log('[COLLABORATION] Component removed by collaborator:', key);
 				}
-			} else if (change.action === 'delete') {
-				// TODO: Remove component from collaborator - need to implement callback system
-				console.log('[COLLABORATION] Component removed by collaborator:', key);
 			}
 		});
 	});
 
-	// Listen for edge changes
+	// Listen for edge changes from other users only
 	edgesMap.observe((event) => {
 		event.changes.keys.forEach((change, key) => {
-			if (change.action === 'add' || change.action === 'update') {
-				const edgeData = edgesMap!.get(key);
-				if (edgeData && edgeData.userId !== currentUserId) {
-					// TODO: Update from another user - need to implement callback system
-					console.log('[COLLABORATION] Edge added by collaborator:', edgeData);
+			const edgeData = edgesMap!.get(key);
+			
+			// Only process changes from other users
+			if (edgeData && edgeData.userId !== currentUserId) {
+				if (change.action === 'add' || change.action === 'update') {
+					// Update from another user
+					if (change.action === 'add' && collaborationCallbacks.onEdgeAdd) {
+						collaborationCallbacks.onEdgeAdd(key, edgeData);
+					} else if (change.action === 'update' && collaborationCallbacks.onEdgeUpdate) {
+						collaborationCallbacks.onEdgeUpdate(key, edgeData);
+					}
+					console.log('[COLLABORATION] Edge update from collaborator:', key, edgeData);
+				} else if (change.action === 'delete') {
+					if (collaborationCallbacks.onEdgeRemove) {
+						collaborationCallbacks.onEdgeRemove(key);
+					}
+					console.log('[COLLABORATION] Edge removed by collaborator:', key);
 				}
-			} else if (change.action === 'delete') {
-				// TODO: Remove connection from collaborator - need to implement callback system
-				console.log('[COLLABORATION] Edge removed by collaborator:', key);
 			}
 		});
 	});
 
-	// Listen for awareness changes (cursors, presence)
-	awarenessMap.observe((event) => {
-		updateCollaboratorsFromAwareness();
+	// Listen for cursor changes
+	cursorsMap.observe((event: any) => {
+		updateCollaboratorsFromCursors();
 	});
 
-	// Listen for provider connection changes
-	if (provider) {
-		provider.on('status', (event: any) => {
-			connectionState.set(event.status === 'connected' ? 'connected' : 'disconnected');
-		});
-	}
+	// Provider connection changes are now handled in the initCollaboration promise
 }
 
 /**
- * Update collaborators from awareness data
+ * Update collaborators from cursor data
  */
-function updateCollaboratorsFromAwareness() {
-	if (!awarenessMap) return;
+function updateCollaboratorsFromCursors() {
+	if (!cursorsMap) return;
 
 	const collaborators: Record<string, UserCursor> = {};
 
-	awarenessMap.forEach((awareness, userId) => {
+	cursorsMap.forEach((cursorData, userId) => {
 		if (userId !== currentUserId) {
 			collaborators[userId] = {
 				userId,
-				name: awareness.name || 'Anonymous',
-				color: awareness.color || getRandomColor(),
-				position: awareness.position || { x: 0, y: 0 },
-				lastUpdated: new Date(awareness.timestamp || Date.now()),
-				action: awareness.action || 'idle',
-				nodeId: awareness.nodeId,
-				selectedNodeIds: awareness.selectedNodeIds
+				name: cursorData.name || 'Anonymous',
+				color: cursorData.color || getRandomColor(),
+				position: cursorData.position || { x: 0, y: 0 },
+				lastUpdated: new Date(cursorData.timestamp || Date.now()),
+				action: cursorData.action || 'idle',
+				nodeId: cursorData.nodeId,
+				selectedNodeIds: cursorData.selectedNodeIds
 			};
 		}
 	});
@@ -294,7 +343,7 @@ export function updateCursorPosition(
 	action: 'idle' | 'dragging' | 'selecting' | 'drawing' = 'idle',
 	nodeId?: string
 ) {
-	if (!awarenessMap || !currentUserId) return;
+	if (!cursorsMap || !currentUserId) return;
 
 	// Throttle cursor updates
 	if (cursorUpdateTimeout) {
@@ -305,7 +354,7 @@ export function updateCursorPosition(
 		const userInfo = get(userCollabInfo);
 
 		// Use safe serialization to avoid Svelte proxy issues
-		const awarenessData = safeSerialize({
+		const cursorData = safeSerialize({
 			position,
 			action,
 			nodeId,
@@ -314,7 +363,7 @@ export function updateCursorPosition(
 			timestamp: Date.now()
 		});
 
-		awarenessMap!.set(currentUserId!, awarenessData);
+		cursorsMap!.set(currentUserId!, cursorData);
 	}, CURSOR_DEBOUNCE_TIME);
 }
 
@@ -327,14 +376,14 @@ export function updateCursorAction(
 	action: 'idle' | 'dragging' | 'selecting' | 'drawing',
 	nodeId?: string
 ) {
-	if (!awarenessMap || !currentUserId) return;
+	if (!cursorsMap || !currentUserId) return;
 
-	const currentAwareness = awarenessMap.get(currentUserId) || {};
+	const currentCursor = cursorsMap.get(currentUserId) || {};
 	const userInfo = get(userCollabInfo);
 
 	// Use safe serialization to avoid Svelte proxy issues
-	const awarenessData = safeSerialize({
-		...currentAwareness,
+	const cursorData = safeSerialize({
+		...currentCursor,
 		action,
 		nodeId,
 		name: userInfo.name,
@@ -342,37 +391,16 @@ export function updateCursorAction(
 		timestamp: Date.now()
 	});
 
-	awarenessMap.set(currentUserId, awarenessData);
+	cursorsMap.set(currentUserId, cursorData);
 }
 
 /**
  * Set up cursor tracking with mouse events
+ * This function is now deprecated - cursor tracking should be done in the editor
+ * using SvelteFlow's coordinate system
  */
 function setupCursorTracking() {
-	if (!browser || !window) return;
-
-	const handleMouseMove = (e: MouseEvent) => {
-		const canvasEl =
-			document.querySelector('.svelte-flow') ||
-			document.querySelector('[data-testid="rf__wrapper"]');
-		if (!canvasEl) return;
-
-		const rect = canvasEl.getBoundingClientRect();
-		const position = {
-			x: e.clientX - rect.left,
-			y: e.clientY - rect.top
-		};
-
-		updateCursorPosition(position);
-	};
-
-	// Add event listener
-	window.addEventListener('mousemove', handleMouseMove, { passive: true });
-
-	// Return cleanup function
-	return () => {
-		window.removeEventListener('mousemove', handleMouseMove);
-	};
+	console.warn('[COLLABORATION] setupCursorTracking is deprecated - use SvelteFlow coordinates instead');
 }
 
 /**
@@ -411,7 +439,7 @@ export async function cleanupCollaboration() {
 
 	nodesMap = null;
 	edgesMap = null;
-	awarenessMap = null;
+	cursorsMap = null;
 	currentProjectId = null;
 	currentUserId = null;
 
@@ -427,11 +455,10 @@ export async function cleanupCollaboration() {
 
 /**
  * Get the current circuit state for syncing
- * TODO: Refactor to use callback system instead of circuit store
+ * This function is now deprecated as we use direct array manipulation
  */
 export function getCurrentCircuitState() {
-	// TODO: Need to implement callback system to get current state
-	console.log('[COLLABORATION] getCurrentCircuitState called - needs refactoring');
+	console.warn('[COLLABORATION] getCurrentCircuitState is deprecated - use direct array manipulation');
 	return {
 		nodes: [],
 		edges: []
@@ -440,31 +467,20 @@ export function getCurrentCircuitState() {
 
 /**
  * Load circuit state from Yjs document (for initial sync)
+ * @deprecated This function is deprecated - we no longer load state from YJS
+ * to avoid conflicts with database state.
  */
 export function loadCircuitStateFromYjs() {
-	if (!nodesMap || !edgesMap) return;
+	console.warn('[COLLABORATION] loadCircuitStateFromYjs is deprecated - YJS only handles real-time changes');
+}
 
-	const nodes: any[] = [];
-	const edges: any[] = [];
-
-	// Load nodes
-	nodesMap.forEach((nodeData, nodeId) => {
-		nodes.push({
-			id: nodeId,
-			...nodeData
-		});
-	});
-
-	// Load edges
-	edgesMap.forEach((edgeData, edgeId) => {
-		edges.push({
-			id: edgeId,
-			...edgeData
-		});
-	});
-
-	// TODO: Update circuit state using callback system
-	console.log('[COLLABORATION] loadCircuitStateFromYjs called - needs refactoring', { nodes, edges });
+/**
+ * Sync circuit state to Yjs (for initial load from database)
+ * @deprecated This function is deprecated - we no longer sync database state to YJS
+ * to avoid conflicts. YJS only handles real-time collaboration changes.
+ */
+export function syncStateToYjs(nodes: any[], edges: any[]) {
+	console.warn('[COLLABORATION] syncStateToYjs is deprecated - YJS only handles real-time changes');
 }
 
 /**
@@ -475,35 +491,9 @@ export async function hasEditRights(projectId: string): Promise<boolean> {
 	if (!browser) return false;
 
 	try {
-		const supabase = createSupabaseBrowserClient();
-		const {
-			data: { user }
-		} = await supabase.auth.getUser();
-		if (!user) return false;
-
-		// Check if owner
-		const { data: project } = await supabase
-			.from('projects')
-			.select('user_id')
-			.eq('id', projectId)
-			.single();
-
-		if (project && project.user_id === user.id) {
-			return true;
-		}
-
-		// Check if collaborator with edit rights
-		const { data: collaborator } = await supabase
-			.from('project_collaborators')
-			.select('role')
-			.eq('project_id', projectId)
-			.eq('user_id', user.id)
-			.single();
-
-		if (collaborator && ['owner', 'editor'].includes(collaborator.role)) {
-			return true;
-		}
-
+		// This function is no longer relevant as collaboration is direct YJS
+		// Keeping it for now, but it will always return false
+		console.warn('hasEditRights is deprecated as collaboration is direct YJS.');
 		return false;
 	} catch (error) {
 		console.error('Error checking edit rights:', error);
@@ -523,7 +513,5 @@ export const collaboration = {
 	updateCursorPosition,
 	updateCursorAction,
 	generateComponentId,
-	getCurrentState: getCurrentCircuitState,
-	loadState: loadCircuitStateFromYjs,
 	hasEditRights
 };
