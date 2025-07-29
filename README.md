@@ -1,6 +1,6 @@
 # Saffron Monorepo
 
-> Proiect Software Utilitar pentru InfoEducație 2024
+> Proiect Software Utilitar pentru InfoEducație 2025
 
 ---
 
