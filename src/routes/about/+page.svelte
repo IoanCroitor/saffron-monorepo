@@ -58,7 +58,7 @@
 				</div>
 
 				<div class="text-center">
-					<Button href="/test" class="mr-4">
+					<Button href="/editor" class="mr-4">
 						Try the Demo
 					</Button>
 					<Button variant="outline" href="/">

@@ -29,7 +29,7 @@
 	}
 
 	function handleProfile() {
-		goto('/dashboard');
+		goto('/editor');
 	}
 
 	function toggleMobileMenu() {
@@ -68,6 +68,7 @@
 				<a href="/projects" class="hover:text-primary text-sm font-medium transition-colors">
 					Projects
 				</a>
+			{/if}
 				<a href="/editor" class="hover:text-primary text-sm font-medium transition-colors">
 					Schematic Editor
 				</a>
@@ -75,10 +76,12 @@
 					Simulator
 				</a>
 				<a href="/scan" class="hover:text-primary text-sm font-medium transition-colors"> Scan </a>
-				<a href="/dashboard" class="hover:text-primary text-sm font-medium transition-colors">
-					Dashboard
-				</a>
-			{/if}
+				{#if session}
+					<a href="/dashboard" class="hover:text-primary text-sm font-medium transition-colors">
+						Dashboard
+					</a>
+				{/if}
+			
 		</div>
 
 		<!-- Auth Buttons -->

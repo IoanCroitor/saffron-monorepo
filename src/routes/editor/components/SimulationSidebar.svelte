@@ -205,12 +205,14 @@
 </script>
 
 <div class="h-full bg-background border-l border-border flex flex-col relative" style="width: {sidebarWidth}px;">
-    <!-- Resize Handle -->
-    <div 
-        class="absolute left-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
-        onmousedown={startResize}
-        title="Drag to resize panel"
-    ></div>
+    <!-- Resize Handle (Desktop only) -->
+    {#if typeof window !== 'undefined' && window.innerWidth >= 768}
+        <div 
+            class="absolute left-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
+            onmousedown={startResize}
+            title="Drag to resize panel"
+        ></div>
+    {/if}
 
     <!-- Header -->
     <div class="p-4 border-b border-border flex-shrink-0 bg-card/50">
@@ -222,6 +224,16 @@
             <div class="flex items-center gap-1">
                 <Badge variant="secondary" class="text-xs font-medium">{nodes.length} comp</Badge>
                 <Badge variant="secondary" class="text-xs font-medium">{edges.length} conn</Badge>
+                {#if typeof window !== 'undefined' && window.innerWidth < 768}
+                    <button
+                        onclick={() => window.dispatchEvent(new CustomEvent('closeSidebar'))}
+                        class="text-muted-foreground hover:text-foreground transition-colors ml-2"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                {/if}
             </div>
         </div>
     </div>

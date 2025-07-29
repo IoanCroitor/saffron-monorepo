@@ -657,22 +657,36 @@
 </script>
 
 <div class="h-full bg-background border-l border-border flex flex-col relative" style="width: {sidebarWidth}px;">
-    <!-- Resize Handle -->
-    <div 
-        class="absolute left-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
-        onmousedown={startResize}
-        title="Drag to resize panel"
-    ></div>
+    <!-- Resize Handle (Desktop only) -->
+    {#if typeof window !== 'undefined' && window.innerWidth >= 768}
+        <div 
+            class="absolute left-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
+            onmousedown={startResize}
+            title="Drag to resize panel"
+        ></div>
+    {/if}
     <!-- Properties Panel -->
     <div class="flex-1 flex flex-col min-h-0">
         <div class="p-4 border-b border-border flex-shrink-0">
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold text-foreground">Properties</h2>
-                {#if selectedNode}
-                    <Badge variant="secondary" class="text-xs">
-                        {selectedNode.type}
-                    </Badge>
-                {/if}
+                <div class="flex items-center gap-2">
+                    {#if selectedNode}
+                        <Badge variant="secondary" class="text-xs">
+                            {selectedNode.type}
+                        </Badge>
+                    {/if}
+                    {#if typeof window !== 'undefined' && window.innerWidth < 768}
+                        <button
+                            onclick={() => window.dispatchEvent(new CustomEvent('closeSidebar'))}
+                            class="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    {/if}
+                </div>
             </div>
         </div>
 

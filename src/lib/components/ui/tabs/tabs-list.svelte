@@ -13,7 +13,11 @@
 	bind:ref
 	data-slot="tabs-list"
 	class={cn(
-		"bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+		"inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+		// Light mode styling - much better contrast with darker background
+		"bg-muted/90 border border-border shadow-sm",
+		// Dark mode styling
+		"dark:bg-muted dark:border-border/20",
 		className
 	)}
 	{...restProps}

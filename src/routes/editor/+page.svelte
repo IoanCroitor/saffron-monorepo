@@ -260,6 +260,12 @@
 	let showSimulation = $state(false);
 	let showProperties = $state(true);
 	
+	// Mobile responsive state
+	let isMobile = $state(false);
+	let showComponentsSidebar = $state(false);
+	let showPropertiesSidebar = $state(false);
+	let showSimulationSidebar = $state(false);
+	
 	// Connection validation state
 
 	let currentProjectId = $state<string | null>(null);
@@ -867,6 +873,23 @@
 			}
 		}, 10000); // Auto-save every 10 seconds if changes
 
+		// Check for mobile device
+		function checkMobile() {
+			isMobile = window.innerWidth < 768;
+		}
+		
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+
+		// Handle mobile sidebar close events
+		function handleCloseSidebar() {
+			showComponentsSidebar = false;
+			showPropertiesSidebar = false;
+			showSimulationSidebar = false;
+		}
+		
+		window.addEventListener('closeSidebar', handleCloseSidebar);
+
 		// Expose collaboration functions globally for debugging (browser only)
 		if (typeof window !== 'undefined') {
 			(window as any).broadcastNodeMovement = broadcastNodeMovement;
@@ -898,7 +921,11 @@
 			collaborationCleanupFn();
 		}
 
-
+		// Clean up event listeners
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('resize', () => {});
+			window.removeEventListener('closeSidebar', () => {});
+		}
 	});
 
 	function onNodeClick(event: any) {
@@ -1374,6 +1401,7 @@
 
 <svelte:head>
 	<title>Circuit Simulator - Saffron</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 </svelte:head>
 <DebugNodeMenu 
 	bind:isVisible={showDebugMenu} 
@@ -1388,8 +1416,8 @@
 	<div
 		class="bg-card border-border flex flex-shrink-0 items-center justify-between border-b px-4 py-2"
 	>
-		<div class="flex items-center space-x-4">
-			<h1 class="text-card-foreground flex items-center text-lg font-semibold">
+		<div class="flex items-center space-x-2 md:space-x-4">
+			<h1 class="text-card-foreground flex items-center text-base md:text-lg font-semibold truncate max-w-[200px] md:max-w-none">
 				{currentProjectName}
 				{#if hasUnsavedChanges}
 					<span class="text-destructive ml-2 text-sm">●</span>
@@ -1397,91 +1425,98 @@
 			</h1>
 		</div>
 
-		<div class="flex items-center space-x-2">
+		<div class="flex items-center space-x-1 md:space-x-2">
+			<!-- Mobile menu button -->
+			{#if isMobile}
+				<button
+					onclick={() => (showComponentsSidebar = !showComponentsSidebar)}
+					class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 py-1.5 text-sm font-medium transition-colors"
+					title="Components"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+					</svg>
+				</button>
+			{/if}
+
 			<button
 				onclick={handleNew}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 md:px-3 py-1.5 text-sm font-medium transition-colors"
 				title="New Circuit (Ctrl+N)"
 			>
 				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M12 4v16m8-8H4"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
 				</svg>
-				New
+				<span class="hidden md:inline">New</span>
 			</button>
-
-
 
 			<button
 				onclick={handleSave}
-				class="text-primary-foreground bg-primary border-primary hover:bg-primary/90 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+				class="text-primary-foreground bg-primary border-primary hover:bg-primary/90 flex items-center rounded-md border px-2 md:px-3 py-1.5 text-sm font-medium transition-colors"
 				title="Save Circuit (Ctrl+S)"
 			>
 				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
 				</svg>
-				{currentProjectId ? 'Update' : 'Save'}
+				<span class="hidden md:inline">{currentProjectId ? 'Update' : 'Save'}</span>
 			</button>
 
-			<button
-				onclick={() => (showProperties = !showProperties)}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {showProperties ? 'bg-primary text-primary-foreground' : ''}"
-				title="Toggle Properties Panel"
-			>
-				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-					/>
-				</svg>
-				Properties
-			</button>
+			{#if !isMobile}
+				<button
+					onclick={() => (showProperties = !showProperties)}
+					class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {showProperties ? 'bg-primary text-primary-foreground' : ''}"
+					title="Toggle Properties Panel"
+				>
+					<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+					Properties
+				</button>
 
-			<button
-				onclick={() => (showSimulation = !showSimulation)}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {showSimulation ? 'bg-primary text-primary-foreground' : ''}"
-				title="Toggle Simulation Panel"
-			>
-				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M13 10V3L4 14h7v7l9-11h-7z"
-					/>
-				</svg>
-				Simulation
-			</button>
+				<button
+					onclick={() => (showSimulation = !showSimulation)}
+					class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {showSimulation ? 'bg-primary text-primary-foreground' : ''}"
+					title="Toggle Simulation Panel"
+				>
+					<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+					</svg>
+					Simulation
+				</button>
+			{:else}
+				<!-- Mobile sidebar toggles -->
+				<button
+					onclick={() => (showPropertiesSidebar = !showPropertiesSidebar)}
+					class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 py-1.5 text-sm font-medium transition-colors {showPropertiesSidebar ? 'bg-primary text-primary-foreground' : ''}"
+					title="Properties"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+				</button>
+
+				<button
+					onclick={() => (showSimulationSidebar = !showSimulationSidebar)}
+					class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 py-1.5 text-sm font-medium transition-colors {showSimulationSidebar ? 'bg-primary text-primary-foreground' : ''}"
+					title="Simulation"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+					</svg>
+				</button>
+			{/if}
 
 			<button
 				onclick={() => (showCollaborationDialog = true)}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 md:px-3 py-1.5 text-sm font-medium transition-colors"
 				title="Collaborative Editing"
 			>
 				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
 				</svg>
-				Collaborate
+				<span class="hidden md:inline">Collaborate</span>
 				{#if collaboratorCount > 0}
-					<span
-						class="bg-chart-2 text-primary-foreground ml-1 min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs"
-					>
+					<span class="bg-chart-2 text-primary-foreground ml-1 min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs">
 						{collaboratorCount}
 					</span>
 				{/if}
@@ -1489,172 +1524,314 @@
 
 			<button
 				onclick={validateCurrentCircuit}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-2 md:px-3 py-1.5 text-sm font-medium transition-colors"
 				title="Validate Circuit"
 			>
 				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 				</svg>
-				Validate
+				<span class="hidden md:inline">Validate</span>
 			</button>
 		</div>
 	</div>
 
 	<div
-		class="bg-background flex min-h-0 flex-1 overflow-hidden"
+		class="bg-background flex min-h-0 flex-1 overflow-hidden relative"
 		class:colored-handles={$settingsStore.coloredHandles}
 		style="overflow-x: hidden;"
 	>
-		<!-- Left Sidebar - Components -->
-		<ComponentsSidebar 
-			{nodes} 
-			{edges} 
-			onAddComponent={addComponent}
-			onClearCircuit={clearCircuit}
-		/>
+		<!-- Desktop Layout -->
+		{#if !isMobile}
+			<!-- Left Sidebar - Components -->
+			<ComponentsSidebar 
+				{nodes} 
+				{edges} 
+				onAddComponent={addComponent}
+				onClearCircuit={clearCircuit}
+			/>
 
-		<!-- Main Canvas -->
-		<div
-			class="relative flex-1 overflow-hidden"
-			ondragover={onDragOver}
-			ondrop={onDrop}
-			ondragleave={onDragLeave}
-			role="application"
-			aria-label="Circuit canvas - drag components here"
-		>
-			<SvelteFlow
-				bind:nodes
-				bind:edges
-				bind:this={svelteFlowInstance}
-				{nodeTypes}
-				{edgeTypes}
-				fitView
-				snapGrid={[10, 10]}
-				onnodeclick={onNodeClick}
-				onpaneclick={onPaneClick}
-				onconnect={onConnect}
-				onnodedrag={onNodeDrag}
-				onnodedragstart={onNodeDragStart}
-				onnodedragstop={onNodeDragStop}
-				onedgeclick={(event) => {
-					const edge = event.edge;
-					selectedWire = edge;
-					selectedNode = null;
-				}}
-				class="bg-background"
+			<!-- Main Canvas -->
+			<div
+				class="relative flex-1 overflow-hidden"
+				ondragover={onDragOver}
+				ondrop={onDrop}
+				ondragleave={onDragLeave}
+				role="application"
+				aria-label="Circuit canvas - drag components here"
 			>
-				<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-				<MiniMap
-					position="bottom-left"
-					nodeColor={(node) => {
-						switch (node.type) {
-							case 'resistor':
-								return '#ef4444';
-							case 'capacitor':
-								return '#3b82f6';
-							case 'inductor':
-								return '#10b981';
-							case 'voltageSource':
-								return '#f59e0b';
-							default:
-								return '#6b7280';
-						}
+				<SvelteFlow
+					bind:nodes
+					bind:edges
+					bind:this={svelteFlowInstance}
+					{nodeTypes}
+					{edgeTypes}
+					fitView
+					snapGrid={[10, 10]}
+					onnodeclick={onNodeClick}
+					onpaneclick={onPaneClick}
+					onconnect={onConnect}
+					onnodedrag={onNodeDrag}
+					onnodedragstart={onNodeDragStart}
+					onnodedragstop={onNodeDragStop}
+					onedgeclick={(event) => {
+						const edge = event.edge;
+						selectedWire = edge;
+						selectedNode = null;
 					}}
-				/>
+					class="bg-background"
+				>
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+					<MiniMap
+						position="bottom-left"
+						nodeColor={(node) => {
+							switch (node.type) {
+								case 'resistor':
+									return '#ef4444';
+								case 'capacitor':
+									return '#3b82f6';
+								case 'inductor':
+									return '#10b981';
+								case 'voltageSource':
+									return '#f59e0b';
+								default:
+									return '#6b7280';
+							}
+						}}
+					/>
 
-				<!-- Status Panel -->
-				<Panel position="bottom-right" class="bg-card border-border rounded-lg border p-3 text-sm">
-					{#if selectedWire}
-						<div class="text-primary font-medium">
-							Wire Selected: {selectedWire.id}
-						</div>
-						<div class="text-muted-foreground mt-1 text-xs">
-							Shape: {selectedWire.data?.wireShape || 'straight'} | Style: {selectedWire.data
-								?.wireStyle || 'solid'}
-						</div>
-					{:else if selectedNode}
-						<div class="text-chart-2 font-medium">
-							{selectedNode.type} Selected
-						</div>
-						<div class="text-muted-foreground mt-1 text-xs">
-							ID: {selectedNode.id}
-						</div>
-					{:else if isDragOver}
-						<div class="text-chart-3 animate-pulse font-medium">Drop component here</div>
-					{:else if isCollaborative}
-						<div class="flex items-center gap-2">
-							<span class="relative flex h-2 w-2">
-								<span
-									class="bg-chart-2 absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
-								></span>
-								<span class="bg-chart-2 relative inline-flex h-2 w-2 rounded-full"></span>
-							</span>
-							<span class="text-muted-foreground">
-								{isReadOnlyMode ? 'Read-only' : 'Collaborative'} mode
-								{#if collaboratorCount > 0}
-									· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
-								{/if}
-							</span>
-							<span class="ml-2">
+					<!-- Status Panel -->
+					<Panel position="bottom-right" class="bg-card border-border rounded-lg border p-3 text-sm">
+						{#if selectedWire}
+							<div class="text-primary font-medium">
+								Wire Selected: {selectedWire.id}
+							</div>
+							<div class="text-muted-foreground mt-1 text-xs">
+								Shape: {selectedWire.data?.wireShape || 'straight'} | Style: {selectedWire.data
+									?.wireStyle || 'solid'}
+							</div>
+						{:else if selectedNode}
+							<div class="text-chart-2 font-medium">
+								{selectedNode.type} Selected
+							</div>
+							<div class="text-muted-foreground mt-1 text-xs">
+								ID: {selectedNode.id}
+							</div>
+						{:else if isDragOver}
+							<div class="text-chart-3 animate-pulse font-medium">Drop component here</div>
+						{:else if isCollaborative}
+							<div class="flex items-center gap-2">
+								<span class="relative flex h-2 w-2">
+									<span
+										class="bg-chart-2 absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+									></span>
+									<span class="bg-chart-2 relative inline-flex h-2 w-2 rounded-full"></span>
+								</span>
+								<span class="text-muted-foreground">
+									{isReadOnlyMode ? 'Read-only' : 'Collaborative'} mode
+									{#if collaboratorCount > 0}
+										· {collaboratorCount} {collaboratorCount === 1 ? 'person' : 'people'} editing
+									{/if}
+								</span>
+								<span class="ml-2">
+									<SaveIndicator 
+										{hasUnsavedChanges}
+										{isAutoSaving}
+										compact={true}
+										alwaysVisible={true}
+									/>
+								</span>
+							</div>
+						{:else if nodes.length > 0 || edges.length > 0}
+							<!-- Non-collaborative save indicator -->
+							<div class="flex items-center justify-center gap-4">
 								<SaveIndicator 
 									{hasUnsavedChanges}
 									{isAutoSaving}
-									compact={true}
+									compact={false}
 									alwaysVisible={true}
 								/>
-							</span>
+							</div>
+						{/if}
+					</Panel>
 
-						</div>
-					{:else if nodes.length > 0 || edges.length > 0}
-						<!-- Non-collaborative save indicator -->
-						<div class="flex items-center justify-center gap-4">
-							<SaveIndicator 
-								{hasUnsavedChanges}
-								{isAutoSaving}
-								compact={false}
-								alwaysVisible={true}
-							/>
-
+					<!-- Drag preview overlay -->
+					{#if isDragOver && dragPosition}
+						<div
+							class="drag-preview"
+							style="transform: translate({dragPosition.x - 40}px, {dragPosition.y - 20}px)"
+						>
+							<div class="drag-preview-content">Drop Here</div>
 						</div>
 					{/if}
-				</Panel>
+				</SvelteFlow>
+			</div>
 
-				<!-- Drag preview overlay -->
-				{#if isDragOver && dragPosition}
-					<div
-						class="drag-preview"
-						style="transform: translate({dragPosition.x - 40}px, {dragPosition.y - 20}px)"
-					>
-						<div class="drag-preview-content">Drop Here</div>
+			<!-- Right Sidebar - Properties & Analysis -->
+			{#if showProperties}
+				<PropertiesSidebar 
+					bind:selectedNode 
+					bind:nodes 
+					{edges}
+					onUpdateComponent={updateComponent}
+					onRemoveComponent={removeComponent}
+					onAddComponent={addComponent}
+					onExportNetlist={exportNetlist}
+					onExportJSON={exportJSON}
+				/>
+			{/if}
+
+			<!-- Simulation Sidebar -->
+			{#if showSimulation}
+				<SimulationSidebar {nodes} {edges} projectName={currentProjectName} />
+			{/if}
+		{:else}
+			<!-- Mobile Layout -->
+			<!-- Main Canvas -->
+			<div
+				class="relative flex-1 overflow-hidden"
+				ondragover={onDragOver}
+				ondrop={onDrop}
+				ondragleave={onDragLeave}
+				role="application"
+				aria-label="Circuit canvas - drag components here"
+			>
+				<SvelteFlow
+					bind:nodes
+					bind:edges
+					bind:this={svelteFlowInstance}
+					{nodeTypes}
+					{edgeTypes}
+					fitView
+					snapGrid={[10, 10]}
+					onnodeclick={onNodeClick}
+					onpaneclick={onPaneClick}
+					onconnect={onConnect}
+					onnodedrag={onNodeDrag}
+					onnodedragstart={onNodeDragStart}
+					onnodedragstop={onNodeDragStop}
+					onedgeclick={(event) => {
+						const edge = event.edge;
+						selectedWire = edge;
+						selectedNode = null;
+					}}
+					class="bg-background"
+				>
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+					<MiniMap
+						position="bottom-left"
+						nodeColor={(node) => {
+							switch (node.type) {
+								case 'resistor':
+									return '#ef4444';
+								case 'capacitor':
+									return '#3b82f6';
+								case 'inductor':
+									return '#10b981';
+								case 'voltageSource':
+									return '#f59e0b';
+								default:
+									return '#6b7280';
+							}
+						}}
+					/>
+
+					<!-- Mobile Status Panel -->
+					<Panel position="bottom-right" class="bg-card border-border rounded-lg border p-2 text-xs">
+						{#if selectedWire}
+							<div class="text-primary font-medium">Wire: {selectedWire.id}</div>
+						{:else if selectedNode}
+							<div class="text-chart-2 font-medium">{selectedNode.type}</div>
+						{:else if isDragOver}
+							<div class="text-chart-3 animate-pulse font-medium">Drop here</div>
+						{:else if isCollaborative}
+							<div class="flex items-center gap-1">
+								<span class="relative flex h-1.5 w-1.5">
+									<span class="bg-chart-2 absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"></span>
+									<span class="bg-chart-2 relative inline-flex h-1.5 w-1.5 rounded-full"></span>
+								</span>
+								<span class="text-muted-foreground text-xs">
+									{collaboratorCount > 0 ? `${collaboratorCount}` : ''}
+								</span>
+							</div>
+						{/if}
+					</Panel>
+
+					<!-- Drag preview overlay -->
+					{#if isDragOver && dragPosition}
+						<div
+							class="drag-preview"
+							style="transform: translate({dragPosition.x - 40}px, {dragPosition.y - 20}px)"
+						>
+							<div class="drag-preview-content">Drop Here</div>
+						</div>
+					{/if}
+				</SvelteFlow>
+			</div>
+
+			<!-- Mobile Sidebars -->
+			{#if showComponentsSidebar}
+				<div class="absolute inset-0 z-50 bg-black/50 transition-opacity duration-300" onclick={() => (showComponentsSidebar = false)}>
+					<div class="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-background border-r border-border transform transition-transform duration-300 mobile-sidebar" onclick={(e) => e.stopPropagation()}>
+						<ComponentsSidebar 
+							{nodes} 
+							{edges} 
+							onAddComponent={addComponent}
+							onClearCircuit={clearCircuit}
+						/>
 					</div>
-				{/if}
+				</div>
+			{/if}
 
-				<!-- Collaborative cursors are now handled as SvelteFlow nodes -->
-			</SvelteFlow>
-		</div>
+			{#if showPropertiesSidebar}
+				<div class="absolute inset-0 z-50 bg-black/50 transition-opacity duration-300" onclick={() => (showPropertiesSidebar = false)}>
+					<div class="absolute right-0 top-0 h-full w-80 max-w-[90vw] bg-background border-l border-border transform transition-transform duration-300 mobile-sidebar" onclick={(e) => e.stopPropagation()}>
+						<PropertiesSidebar 
+							bind:selectedNode 
+							bind:nodes 
+							{edges}
+							onUpdateComponent={updateComponent}
+							onRemoveComponent={removeComponent}
+							onAddComponent={addComponent}
+							onExportNetlist={exportNetlist}
+							onExportJSON={exportJSON}
+						/>
+					</div>
+				</div>
+			{/if}
 
-		<!-- Right Sidebar - Properties & Analysis -->
-		{#if showProperties}
-			<PropertiesSidebar 
-				bind:selectedNode 
-				bind:nodes 
-				{edges}
-				onUpdateComponent={updateComponent}
-				onRemoveComponent={removeComponent}
-				onAddComponent={addComponent}
-				onExportNetlist={exportNetlist}
-				onExportJSON={exportJSON}
-			/>
-		{/if}
+			{#if showSimulationSidebar}
+				<div class="absolute inset-0 z-50 bg-black/50 transition-opacity duration-300" onclick={() => (showSimulationSidebar = false)}>
+					<div class="absolute right-0 top-0 h-full w-80 max-w-[90vw] bg-background border-l border-border transform transition-transform duration-300 mobile-sidebar" onclick={(e) => e.stopPropagation()}>
+						<SimulationSidebar {nodes} {edges} projectName={currentProjectName} />
+					</div>
+				</div>
+			{/if}
 
-		<!-- Simulation Sidebar -->
-		{#if showSimulation}
-			<SimulationSidebar {nodes} {edges} projectName={currentProjectName} />
+			<!-- Mobile Floating Action Button -->
+			<div class="fixed bottom-4 right-4 z-40 md:hidden">
+				<div class="flex flex-col gap-2">
+					{#if selectedNode}
+						<button
+							onclick={() => (showPropertiesSidebar = !showPropertiesSidebar)}
+							class="bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:bg-primary/90 transition-colors"
+							title="Properties"
+						>
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+						</button>
+					{/if}
+					<button
+						onclick={() => (showSimulationSidebar = !showSimulationSidebar)}
+						class="bg-secondary text-secondary-foreground rounded-full p-3 shadow-lg hover:bg-secondary/80 transition-colors"
+						title="Simulation"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+						</svg>
+					</button>
+				</div>
+			</div>
 		{/if}
 	</div>
 
@@ -1800,6 +1977,82 @@
 		box-shadow: 0 4px 12px hsl(var(--primary) / 0.3);
 		border: 2px dashed hsl(var(--primary-foreground));
 		animation: pulse 1s infinite;
+	}
+
+	/* Mobile-specific styles */
+	@media (max-width: 768px) {
+		:global(.svelte-flow) {
+			touch-action: manipulation;
+		}
+
+		:global(.svelte-flow .svelte-flow__node) {
+			touch-action: manipulation;
+		}
+
+		:global(.svelte-flow .svelte-flow__handle) {
+			touch-action: manipulation;
+		}
+
+		/* Improve touch targets */
+		:global(.svelte-flow .svelte-flow__controls-button) {
+			min-width: 44px;
+			min-height: 44px;
+		}
+
+		/* Prevent zoom on double tap */
+		:global(*) {
+			touch-action: manipulation;
+		}
+
+		/* Improve button touch targets */
+		button {
+			min-height: 44px;
+			min-width: 44px;
+		}
+
+		/* Mobile sidebar improvements */
+		.mobile-sidebar {
+			-webkit-overflow-scrolling: touch;
+			overscroll-behavior: contain;
+		}
+
+		/* Mobile sidebar animations */
+		.mobile-sidebar-enter {
+			transform: translateX(-100%);
+			transition: transform 0.3s ease-out;
+		}
+
+		.mobile-sidebar-enter-active {
+			transform: translateX(0);
+		}
+
+		.mobile-sidebar-exit {
+			transform: translateX(0);
+			transition: transform 0.3s ease-in;
+		}
+
+		.mobile-sidebar-exit-active {
+			transform: translateX(-100%);
+		}
+
+		/* Right sidebar animations */
+		.mobile-sidebar-right-enter {
+			transform: translateX(100%);
+			transition: transform 0.3s ease-out;
+		}
+
+		.mobile-sidebar-right-enter-active {
+			transform: translateX(0);
+		}
+
+		.mobile-sidebar-right-exit {
+			transform: translateX(0);
+			transition: transform 0.3s ease-in;
+		}
+
+		.mobile-sidebar-right-exit-active {
+			transform: translateX(100%);
+		}
 	}
 
 	@keyframes pulse {

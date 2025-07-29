@@ -24,6 +24,7 @@
 	let isResizing = $state(false);
 	let startX = 0;
 	let startWidth = 0;
+	let isMobile = $state(false);
 
 	function startResize(event: MouseEvent) {
 		if (typeof document === 'undefined') return;
@@ -57,6 +58,17 @@
 		if (typeof document !== 'undefined') {
 			document.addEventListener('mousemove', handleResize);
 			document.addEventListener('mouseup', stopResize);
+			
+			// Check for mobile
+			function checkMobile() {
+				isMobile = window.innerWidth < 768;
+				if (isMobile) {
+					sidebarWidth = window.innerWidth * 0.9; // 90% of screen width on mobile
+				}
+			}
+			
+			checkMobile();
+			window.addEventListener('resize', checkMobile);
 		}
 	});
 
@@ -64,6 +76,7 @@
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('mousemove', handleResize);
 			document.removeEventListener('mouseup', stopResize);
+			window.removeEventListener('resize', () => {});
 		}
 	});
 
@@ -168,15 +181,29 @@
 </script>
 
 <div class="h-full bg-background border-r border-border flex flex-col relative" style="width: {sidebarWidth}px;">
-	<!-- Resize Handle -->
-	<div 
-		class="absolute right-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
-		onmousedown={startResize}
-		title="Drag to resize panel"
-	></div>
+	<!-- Resize Handle (Desktop only) -->
+	{#if typeof window !== 'undefined' && window.innerWidth >= 768}
+		<div 
+			class="absolute right-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
+			onmousedown={startResize}
+			title="Drag to resize panel"
+		></div>
+	{/if}
 	<!-- Header -->
 	<div class="p-4 border-b border-border">
-		<h2 class="text-lg font-semibold text-foreground mb-3">Components</h2>
+		<div class="flex items-center justify-between mb-3">
+			<h2 class="text-lg font-semibold text-foreground">Components</h2>
+			{#if typeof window !== 'undefined' && window.innerWidth < 768}
+				<button
+					onclick={() => window.dispatchEvent(new CustomEvent('closeSidebar'))}
+					class="text-muted-foreground hover:text-foreground transition-colors"
+				>
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			{/if}
+		</div>
 		<div class="relative">
 			<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 			<Input
@@ -194,9 +221,9 @@
 				<h3 class="text-sm font-medium text-muted-foreground uppercase tracking-wide">
 					{category.name}
 				</h3>
-				<div class="grid grid-cols-2 gap-2">
+				<div class="grid grid-cols-2 md:grid-cols-2 gap-2">
 					{#each category.components as component (component.type)}
-						<Card class="p-3 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors border-dashed border-2 {draggedComponent === component.type ? 'opacity-50' : ''}">
+						<Card class="p-2 md:p-3 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors border-dashed border-2 {draggedComponent === component.type ? 'opacity-50' : ''}">
 							<button
 								class="w-full text-left"
 								draggable="true"
@@ -204,11 +231,11 @@
 								ondragend={handleDragEnd}
 								onclick={() => handleClick(component.type)}
 							>
-								<div class="flex flex-col items-center space-y-2">
-									<ComponentIcon type={component.type} class="w-8 h-8" />
+								<div class="flex flex-col items-center space-y-1 md:space-y-2">
+									<ComponentIcon type={component.type} class="w-6 h-6 md:w-8 md:h-8" />
 									<div class="text-center">
 										<div class="text-xs font-medium">{component.label}</div>
-										<div class="text-xs text-muted-foreground line-clamp-1">
+										<div class="text-xs text-muted-foreground line-clamp-1 hidden md:block">
 											{component.description}
 										</div>
 									</div>

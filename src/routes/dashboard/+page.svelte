@@ -78,7 +78,7 @@
 									<!-- Placeholder for Gemini API key input/display -->
 								</p>
 							</div>
-							<Button href="/test" class="mt-2 w-full">Launch Circuit Designer</Button>
+							<Button href="/editor" class="mt-2 w-full">Launch Circuit Designer</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>

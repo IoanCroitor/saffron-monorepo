@@ -1086,7 +1086,7 @@ Return a JSON object with this structure:
 			</div>
 
 			<!-- Results Section -->
-			<div class="space-y-8">
+			
 				<Card class="shadow-lg border-0 bg-card/50 backdrop-blur-sm">
 					<CardHeader class="pb-6">
 						<CardTitle class="flex items-center gap-3 text-2xl">
@@ -1457,7 +1457,7 @@ Return a JSON object with this structure:
 			</div>
 		</div>
 	</div>
-</div>
+
 
 <!-- Camera Dialog -->
 <Dialog.Root bind:open={showCameraDialog}>
