@@ -72,12 +72,14 @@ export const actions: Actions = {
 				});
 			}
 
-			// Redirect to the new project's page or to the editor
-			throw redirect(303, `/projects/${project.id}`);
+			// Project created successfully, redirect to projects page
+			throw redirect(303, '/projects');
 		} catch (err) {
-			if (err instanceof Error && 'status' in err && 'location' in err) {
-				throw err; // Re-throw redirects
+			// If it's a redirect, re-throw it
+			if (err && typeof err === 'object' && 'status' in err && 'location' in err) {
+				throw err;
 			}
+			// Log and handle other errors
 			console.error('Unexpected error creating project:', err);
 			return fail(500, {
 				error: 'An unexpected error occurred. Please try again.',

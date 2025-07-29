@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { ArrowLeft, Edit, Share, Download, Trash2, CircuitBoard, Zap, Calendar, Clock, BarChart3 } from '@lucide/svelte';
+	import { ArrowLeft, Edit, Trash2, CircuitBoard, Zap, Calendar, Clock, BarChart3 } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
@@ -18,15 +18,7 @@
 		goto(`/editor?id=${data.project.id}`);
 	}
 	
-	function handleShare() {
-		// TODO: Implement sharing functionality
-		console.log('Share project:', data.project.id);
-	}
-	
-	function handleDownload() {
-		// TODO: Implement download functionality (netlist, JSON, etc.)
-		console.log('Download project:', data.project.id);
-	}
+
 	
 	function getStatusColor(status: string) {
 		switch (status) {
@@ -68,14 +60,6 @@
 					</div>
 				</div>
 				<div class="flex items-center gap-2">
-					<Button variant="outline" size="sm" onclick={handleShare}>
-						<Share class="w-4 h-4 mr-2" />
-						Share
-					</Button>
-					<Button variant="outline" size="sm" onclick={handleDownload}>
-						<Download class="w-4 h-4 mr-2" />
-						Export
-					</Button>
 					<Button size="sm" onclick={handleEdit}>
 						<Edit class="w-4 h-4 mr-2" />
 						Edit Circuit
@@ -169,14 +153,6 @@
 						<div>
 							<h4 class="font-medium mb-2">Actions</h4>
 							<div class="space-y-2">
-								<Button variant="outline" size="sm" class="w-full justify-start" onclick={handleShare}>
-									<Share class="w-4 h-4 mr-2" />
-									Share Project
-								</Button>
-								<Button variant="outline" size="sm" class="w-full justify-start" onclick={handleDownload}>
-									<Download class="w-4 h-4 mr-2" />
-									Export Schematic
-								</Button>
 								<form method="POST" action="?/delete" use:enhance={() => {
 									if (!confirm(`Are you sure you want to delete "${data.project.name}"? This action cannot be undone.`)) {
 										return () => {};

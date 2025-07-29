@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { goto } from '$app/navigation';
 
 	interface Props {
 		isVisible: boolean;
@@ -27,6 +28,29 @@
 			}
 		} catch (error) {
 			console.error('Invalid JSON:', error);
+		}
+	}
+
+	function loadInNewPage() {
+		try {
+			const data = JSON.parse(jsonText);
+			if (data.nodes && data.edges) {
+				// Encode the JSON data for URL parameter
+				const encodedData = encodeURIComponent(JSON.stringify(data));
+				
+				// Check if the URL would be too long (browsers have URL length limits)
+				const url = `/editor?load=${encodedData}`;
+				if (url.length > 2000) {
+					alert('The circuit data is too large to load via URL. Please use the "Load from JSON" button instead.');
+					return;
+				}
+				
+				// Navigate to a new editor page with the JSON data
+				goto(url);
+			}
+		} catch (error) {
+			console.error('Invalid JSON:', error);
+			alert('Invalid JSON data. Please check the format.');
 		}
 	}
 
@@ -72,9 +96,14 @@
 							class="w-full h-32 p-2 border rounded font-mono text-sm"
 							placeholder="JSON data will appear here..."
 						></textarea>
-						<button onclick={loadFromJson} class="px-3 py-1 bg-green-500 text-white rounded">
-							Load from JSON
-						</button>
+						<div class="flex gap-2">
+							<button onclick={loadFromJson} class="px-3 py-1 bg-green-500 text-white rounded flex-1" title="Load JSON data into current page">
+								Load from JSON
+							</button>
+							<button onclick={loadInNewPage} class="px-3 py-1 bg-purple-500 text-white rounded flex-1" title="Open new editor page with JSON data">
+								Open New Page
+							</button>
+						</div>
 					</div>
 				</div>
 			</div>

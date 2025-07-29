@@ -32,7 +32,7 @@
 	// Removed CursorNode import
 	import WireEdge from './components/edges/WireEdge.svelte';
 	import SaveProjectDialog from './components/SaveProjectDialog.svelte';
-	import LoadProjectDialog from './components/LoadProjectDialog.svelte';
+
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
 	import SimulationSidebar from './components/SimulationSidebar.svelte';
 	import SaveIndicator from './components/SaveIndicator.svelte';
@@ -254,7 +254,7 @@
 	let dragPosition = $state<{ x: number; y: number } | null>(null);
 	let svelteFlowInstance = $state<any>(null);
 	let showSaveDialog = $state(false);
-	let showLoadDialog = $state(false);
+
 	let showCollaborationDialog = $state(false);
 	let showDebugMenu = $state(false);
 	let showSimulation = $state(false);
@@ -576,9 +576,7 @@
 				if (event.key === 's') {
 					event.preventDefault();
 					handleSave();
-				} else if (event.key === 'o') {
-					event.preventDefault();
-					handleLoad();
+
 				} else if (event.key === 'n') {
 					event.preventDefault();
 					handleNew();
@@ -816,11 +814,50 @@
 		// Check if we have a project ID in the URL
 		const urlParams = new URLSearchParams(window.location.search);
 		const projectId = urlParams.get('id');
+		const loadData = urlParams.get('load');
 
 		if (projectId) {
 			// Load the project
 			currentProjectId = projectId;
 			loadProject(projectId);
+		} else if (loadData) {
+			// Load circuit data from URL parameter
+			try {
+				const decodedData = decodeURIComponent(loadData);
+				const circuitData = JSON.parse(decodedData);
+				
+				if (circuitData.nodes && circuitData.edges) {
+					// Validate that nodes and edges are arrays
+					if (!Array.isArray(circuitData.nodes) || !Array.isArray(circuitData.edges)) {
+						throw new Error('Invalid circuit data format: nodes and edges must be arrays');
+					}
+					
+					nodes = circuitData.nodes || [];
+					edges = circuitData.edges || [];
+					
+					// Set initial state for change tracking
+					initialNodes = JSON.parse(JSON.stringify(nodes));
+					initialEdges = JSON.parse(JSON.stringify(edges));
+					
+					currentProjectName = 'Loaded Circuit';
+					hasUnsavedChanges = false;
+					
+					console.log('[EDITOR] Circuit loaded from URL parameter:', { 
+						nodes: nodes.length, 
+						edges: edges.length 
+					});
+					
+					// Clear the load parameter from URL
+					const url = new URL(window.location.toString());
+					url.searchParams.delete('load');
+					history.replaceState({}, '', url.toString());
+				} else {
+					console.error('[EDITOR] Invalid circuit data: missing nodes or edges');
+				}
+			} catch (error) {
+				console.error('[EDITOR] Failed to load circuit from URL parameter:', error);
+				alert('Failed to load circuit data. Please check the JSON format.');
+			}
 		}
 
 		// Set up auto-save interval for collaborative editing
@@ -1227,10 +1264,7 @@
 		goto('/editor', { replaceState: true });
 	}
 
-	function handleLoad() {
-		// Show load dialog to select a circuit
-		showLoadDialog = true;
-	}
+
 
 	// Function to manually save changes for collaborative editing
 	async function saveChanges() {
@@ -1316,7 +1350,7 @@
 			if (!confirmed) return;
 		}
 
-		showLoadDialog = false;
+
 		await loadProject(projectId);
 	}
 
@@ -1380,21 +1414,7 @@
 				New
 			</button>
 
-			<button
-				onclick={handleLoad}
-				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
-				title="Load Circuit (Ctrl+O)"
-			>
-				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
-					/>
-				</svg>
-				Load
-			</button>
+
 
 			<button
 				onclick={handleSave}
@@ -1658,10 +1678,7 @@
 		/>
 	{/if}
 
-	<!-- Load Project Dialog -->
-	{#if showLoadDialog}
-		<LoadProjectDialog bind:show={showLoadDialog} on:projectSelected={onProjectSelected} />
-	{/if}
+
 
 	<!-- Collaboration Dialog -->
 	<CollaborationDialog

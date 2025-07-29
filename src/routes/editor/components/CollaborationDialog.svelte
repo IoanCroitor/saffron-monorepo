@@ -5,6 +5,7 @@
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Copy, Users, Share2, Check } from '@lucide/svelte';
+	import { fade, scale } from 'svelte/transition';
 	
 	const dispatch = createEventDispatcher();
 	
@@ -14,32 +15,13 @@
 	
 	let joinCode = '';
 	let copySuccess = false;
+	let shareSuccess = false;
 	let isJoining = false;
 	let joinError = '';
 	
-	// Generate a readable join code based on project ID
-	$: displayJoinCode = projectId ? generateJoinCode(projectId) : '';
-	
-	function generateJoinCode(projectId: string): string {
-		// Create a short, readable code from project ID
-		const hash = projectId.split('').reduce((acc, char) => {
-			return ((acc << 5) - acc + char.charCodeAt(0)) & 0xfffff;
-		}, 0);
-		
-		// Convert to base36 and pad to 6 characters
-		return Math.abs(hash).toString(36).substring(0, 6).toUpperCase();
-	}
-	
-	function parseJoinCode(code: string): string | null {
-		// For now, we'll need to store join code mappings
-		// This is simplified - in production you'd have a database table
-		// mapping join codes to project IDs
-		return null;
-	}
-	
-	async function copyJoinCode() {
+	async function copyProjectId() {
 		try {
-			await navigator.clipboard.writeText(displayJoinCode);
+			await navigator.clipboard.writeText(projectId);
 			copySuccess = true;
 			setTimeout(() => copySuccess = false, 2000);
 		} catch (err) {
@@ -51,8 +33,8 @@
 		const url = `${window.location.origin}/editor?id=${projectId}`;
 		try {
 			await navigator.clipboard.writeText(url);
-			copySuccess = true;
-			setTimeout(() => copySuccess = false, 2000);
+			shareSuccess = true;
+			setTimeout(() => shareSuccess = false, 2000);
 		} catch (err) {
 			console.error('Failed to copy:', err);
 		}
@@ -65,18 +47,8 @@
 		joinError = '';
 		
 		try {
-			// For now, we'll try to use the join code as a project ID directly
-			// In a production system, you'd look up the project ID from the join code in a database
-			let targetProjectId = joinCode.toLowerCase().trim();
-			
-			// If the join code looks like our generated format (6 chars, alphanumeric), 
-			// we need to reverse-lookup the project ID
-			if (/^[A-Z0-9]{6}$/i.test(joinCode)) {
-				// For demo purposes, we'll assume the user enters the actual project ID
-				// In production, implement proper join code to project ID mapping
-				joinError = 'Please enter the full project ID for now. Join code lookup will be implemented in production.';
-				return;
-			}
+			// Use the entered code as the project ID directly
+			let targetProjectId = joinCode.trim();
 			
 			// Dispatch join event with project ID
 			dispatch('join', { projectId: targetProjectId });
@@ -85,7 +57,7 @@
 			isOpen = false;
 			joinCode = '';
 		} catch (error) {
-			joinError = 'Invalid join code. Please check and try again.';
+			joinError = 'Invalid project ID. Please check and try again.';
 		} finally {
 			isJoining = false;
 		}
@@ -118,30 +90,34 @@
 						</Badge>
 					</div>
 					
-					<!-- Join Code -->
+					<!-- Project ID -->
 					<div class="space-y-2">
-						<label class="text-sm font-medium">Join Code</label>
+						<label class="text-sm font-medium">Project ID</label>
 						<div class="flex items-center gap-2">
 							<Input
-								value={displayJoinCode}
+								value={projectId}
 								readonly
-								class="font-mono text-lg tracking-wider text-center"
+								class="font-mono text-sm tracking-wider"
 							/>
 							<Button
 								variant="outline"
 								size="sm"
-								on:click={copyJoinCode}
-								class="p-2"
+								on:click={copyProjectId}
+								class="copy-btn p-2 transition-all duration-200 hover:scale-105 active:scale-95"
 							>
 								{#if copySuccess}
-									<Check class="h-4 w-4 text-green-600" />
+									<div in:scale={{ duration: 150 }} out:scale={{ duration: 150 }}>
+										<Check class="h-4 w-4 text-green-600" />
+									</div>
 								{:else}
-									<Copy class="h-4 w-4" />
+									<div in:scale={{ duration: 150 }} out:scale={{ duration: 150 }}>
+										<Copy class="h-4 w-4" />
+									</div>
 								{/if}
 							</Button>
 						</div>
 						<p class="text-xs text-muted-foreground">
-							Share this code with others to join your session
+							Share this project ID with others to join your session
 						</p>
 					</div>
 					
@@ -158,9 +134,17 @@
 								variant="outline"
 								size="sm"
 								on:click={copyJoinLink}
-								class="p-2"
+								class="share-btn p-2 transition-all duration-200 hover:scale-105 active:scale-95"
 							>
-								<Share2 class="h-4 w-4" />
+								{#if shareSuccess}
+									<div in:scale={{ duration: 150 }} out:scale={{ duration: 150 }}>
+										<Check class="h-4 w-4 text-green-600" />
+									</div>
+								{:else}
+									<div in:scale={{ duration: 150 }} out:scale={{ duration: 150 }}>
+										<Share2 class="h-4 w-4" />
+									</div>
+								{/if}
 							</Button>
 						</div>
 					</div>
@@ -179,13 +163,13 @@
 							on:keydown={handleKeyDown}
 						/>
 						{#if joinError}
-							<p class="text-sm text-red-600">{joinError}</p>
+							<p class="text-sm text-red-600" in:fade={{ duration: 200 }}>{joinError}</p>
 						{/if}
 					</div>
 					<Button
 						on:click={joinWithCode}
 						disabled={!joinCode.trim() || isJoining}
-						class="w-full"
+						class="w-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
 					>
 						{#if isJoining}
 							Joining...
@@ -202,5 +186,28 @@
 <style>
 	:global(.font-mono) {
 		font-family: 'SF Mono', Monaco, 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+	}
+	
+	.copy-btn, .share-btn {
+		position: relative;
+		overflow: hidden;
+	}
+	
+	.copy-btn::before, .share-btn::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 0;
+		height: 0;
+		background: rgba(34, 197, 94, 0.2);
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		transition: width 0.3s ease, height 0.3s ease;
+	}
+	
+	.copy-btn:active::before, .share-btn:active::before {
+		width: 100%;
+		height: 100%;
 	}
 </style>

@@ -10,6 +10,7 @@
 	import type { DisplayDataType } from './lib/displayData';
 	import { makeDD } from './lib/displayData';
 	import { getParser } from './lib/parserDC';
+	import { geminiAPI, type NetlistCorrectionResponse } from '$lib/services/gemini-api';
 	// shadcn-svelte components
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -29,7 +30,8 @@
 		Minimize2,
 		Ruler,
 		Eye,
-		GripVertical
+		GripVertical,
+		Star
 	} from '@lucide/svelte';
 
 	// Props from server
@@ -313,6 +315,11 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	let exampleSelectorOpen = false;
 	let isFullscreen = false;
 
+	// Netlist correction state
+	let isCorrecting = false;
+	let correctionResult: NetlistCorrectionResponse | null = null;
+	let showCorrectionDialog = false;
+
 	// Resizable layout state
 	let editorWidth = 25; // percentage
 	let sidebarWidth = 20; // percentage
@@ -591,6 +598,96 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		}
 	}
 
+	async function correctNetlist() {
+		if (!errorMessage || isCorrecting) {
+			return;
+		}
+
+		console.log('Starting netlist correction...');
+		console.log('Error message:', errorMessage);
+		console.log('Current netlist:', netlistCode);
+
+		isCorrecting = true;
+		correctionResult = null;
+
+		try {
+			// Determine simulation type from netlist
+			let simulationType: 'transient' | 'ac' | 'dc' = 'transient';
+			if (netlistCode.includes('.ac')) {
+				simulationType = 'ac';
+			} else if (netlistCode.includes('.dc')) {
+				simulationType = 'dc';
+			}
+
+			console.log('Simulation type:', simulationType);
+
+			const result = await geminiAPI.correctNetlist({
+				netlist: netlistCode,
+				errorMessage: errorMessage,
+				simulationType: simulationType
+			});
+
+			console.log('Correction result:', result);
+			correctionResult = result;
+			
+			if (result.success) {
+				// Apply the corrected netlist
+				netlistCode = result.correctedNetlist;
+				errorMessage = '';
+				showCorrectionDialog = true;
+				console.log('Correction applied successfully');
+			} else {
+				errorMessage = 'Failed to correct netlist: ' + result.explanation;
+				console.error('Correction failed:', result.explanation);
+			}
+		} catch (error) {
+			console.error('Netlist correction error:', error);
+			errorMessage = 'Failed to correct netlist: ' + (error instanceof Error ? error.message : 'Unknown error');
+		} finally {
+			isCorrecting = false;
+		}
+	}
+
+	function applyCorrection() {
+		if (correctionResult && correctionResult.success) {
+			netlistCode = correctionResult.correctedNetlist;
+			errorMessage = '';
+			showCorrectionDialog = false;
+			correctionResult = null;
+		}
+	}
+
+	function dismissCorrection() {
+		showCorrectionDialog = false;
+		correctionResult = null;
+	}
+
+	async function validateNetlist() {
+		if (!netlistCode.trim() || isCorrecting) {
+			return;
+		}
+
+		isCorrecting = true;
+		errorMessage = '';
+
+		try {
+			console.log('Starting netlist validation...');
+			const validation = await geminiAPI.validateNetlist(netlistCode);
+			console.log('Validation result:', validation);
+			
+			if (validation.isValid) {
+				errorMessage = 'Netlist validation passed! No issues found.';
+			} else {
+				errorMessage = `Validation issues found:\n${validation.issues.join('\n')}`;
+			}
+		} catch (error) {
+			console.error('Netlist validation error:', error);
+			errorMessage = 'Failed to validate netlist: ' + (error instanceof Error ? error.message : 'Unknown error');
+		} finally {
+			isCorrecting = false;
+		}
+	}
+
 	function onCodeChange(code: string) {
 		netlistCode = code;
 	}
@@ -712,6 +809,24 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 						{isInitialized ? '✓' : '✗'} {isRunning ? '▶' : '⏸'}
 					</div>
 					
+					<!-- Netlist Correction Button -->
+					{#if errorMessage}
+						<button 
+							on:click={correctNetlist}
+							disabled={isCorrecting}
+							class="inline-flex items-center gap-1 px-3 py-1.5 border border-input bg-background text-foreground rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+							title="Fix netlist errors with AI"
+						>
+							{#if isCorrecting}
+								<Settings class="h-3 w-3 icon-fixed-sm animate-spin" />
+								Fixing...
+							{:else}
+								<Star class="h-3 w-3 icon-fixed-sm" />
+								Fix
+							{/if}
+						</button>
+					{/if}
+					
 					<!-- Fullscreen Toggle -->
 					<button 
 						on:click={toggleFullscreen}
@@ -734,6 +849,59 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			<div class="flex items-center gap-2">
 				<XCircle class="h-4 w-4" />
 				<strong>Simulation Error:</strong> {errorMessage}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Correction Dialog -->
+	{#if showCorrectionDialog && correctionResult}
+		<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+			<div class="bg-background border border-border rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+				<div class="flex items-center gap-2 mb-4">
+					<Star class="h-5 w-5 text-primary" />
+					<h3 class="text-lg font-semibold">Netlist Correction Applied</h3>
+				</div>
+				
+				<div class="space-y-4">
+					<div>
+						<h4 class="font-medium mb-2">Explanation:</h4>
+						<p class="text-sm text-muted-foreground">{correctionResult.explanation}</p>
+					</div>
+					
+					{#if correctionResult.changes.length > 0}
+						<div>
+							<h4 class="font-medium mb-2">Changes Made:</h4>
+							<ul class="text-sm text-muted-foreground space-y-1">
+								{#each correctionResult.changes as change}
+									<li class="flex items-center gap-2">
+										<div class="w-1.5 h-1.5 bg-primary rounded-full"></div>
+										{change}
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+					
+					<div>
+						<h4 class="font-medium mb-2">Corrected Netlist:</h4>
+						<pre class="bg-muted p-3 rounded text-xs overflow-x-auto">{correctionResult.correctedNetlist}</pre>
+					</div>
+				</div>
+				
+				<div class="flex gap-2 mt-6">
+					<button 
+						on:click={applyCorrection}
+						class="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
+					>
+						Apply Correction
+					</button>
+					<button 
+						on:click={dismissCorrection}
+						class="px-4 py-2 border border-input bg-background text-foreground rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+					>
+						Dismiss
+					</button>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -790,6 +958,24 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 							on:change={(e) => !readOnly && onCodeChange(e.detail)}
 						/>
 					</div>
+				</div>
+
+				<!-- Netlist Validation -->
+				<div class="space-y-2">
+					<button 
+						on:click={validateNetlist}
+						disabled={isCorrecting || !netlistCode.trim()}
+						class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 border border-input bg-background text-foreground rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+						title="Validate netlist for common issues"
+					>
+						{#if isCorrecting}
+							<Settings class="h-3 w-3 animate-spin" />
+							Validating...
+						{:else}
+							<Star class="h-3 w-3" />
+							Validate Netlist
+						{/if}
+					</button>
 				</div>
 			</div>
 		</div>
