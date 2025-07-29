@@ -1,38 +1,83 @@
-# sv
+# Saffron Monorepo
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+> Proiect Software Utilitar pentru InfoEducație 2024
 
-## Creating a project
+---
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Ce este Saffron?
+
+Saffron este o platformă web modernă pentru proiectarea și simularea circuitelor electronice, dezvoltată ca un real instrument educațional și de prototipare rapidă. Aplicația este creată pentru a fi accesibilă, intuitivă și puternică, cu funcționalități avansate de colaborare în timp real și integrare AI.
+
+---
+
+## Funcționalități principale
+
+- **Editor vizual de circuite**: design intuitiv cu drag-and-drop, conectare vizuală între componente.
+- **Colaborare în timp real**: utilizatorii pot lucra simultan pe același proiect folosind tehnologia YJS (WebSocket).
+- **Integrare AI**: analiza automată și sugestii cu Google Gemini AI.
+- **Export SPICE**: compatibilitate cu simulatoare profesionale.
+- **Bibliotecă extinsă de componente**: rezistori, condensatori, bobine, diode, tranzistori, AO și multe altele.
+- **Recunoaștere automată a circuitelor din imagini** (prin integrarea [Circuit Recognition](https://deepwiki.com/IoanCroitor/circuitrecognition/)).
+- **Simulări avansate** (prin integrarea [HTTR](https://deepwiki.com/IoanCroitor/HTTR)).
+- **Sistem modern de autentificare și stocare** (Supabase).
+
+---
+
+## Arhitectură și Tehnologii
+
+- **Frontend**: [SvelteKit](https://kit.svelte.dev/), [TailwindCSS](https://tailwindcss.com/), [shadcn-svelte](https://ui.shadcn.com/)
+- **Colaborare**: [YJS](https://yjs.dev/) pentru sincronizare dată reală
+- **Backend & Auth**: [Supabase](https://supabase.com/) (bază de date relațională, autentificare, storage)
+- **AI**: Integrare [Google Gemini](https://deepmind.google/technologies/gemini/)
+- **Export**: Generare fișiere SPICE standard
+- **Testare**: [Vitest](https://vitest.dev/) (componente și fluxuri)
+
+---
+
+## Instalare și rulare locală
 
 ```bash
-# create a new project in the current directory
-npx sv create
+git clone https://github.com/IoanCroitor/saffron-monorepo.git
+cd saffron-monorepo
+npm install
 
-# create a new project in my-app
-npx sv create my-app
-```
+# Configurare variabile de mediu
+cp .env.example .env
+# Editați .env cu datele personale Supabase
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
+# Rularea aplicației în modul dezvoltare
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```bash
+# Pentru build de producție
 npm run build
+npm run preview
 ```
 
-You can preview the production build with `npm run preview`.
+---
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Roadmap
+
+- Integrare completă a simulatorului SPICE și a analizelor DC/AC/Tranzientă
+- Extindere bibliotecă de componente electronice
+- Colaborare asincronă și comentarii pe proiecte
+- Integrare cu platforme educaționale externe
+
+---
+
+## Documentație & Resurse
+
+- [Documentație Saffron (DeepWiki)](https://deepwiki.com/IoanCroitor/saffron-monorepo)
+- [Documentație Circuit Recognition (DeepWiki)](https://deepwiki.com/IoanCroitor/circuitrecognition/)
+- [Documentație HTTR (DeepWiki)](https://deepwiki.com/IoanCroitor/HTTR)
+
+---
+
+## Contribuie & Contact
+
+Oricine este binevenit să contribuie! Pentru bug-uri sau propuneri, folosiți [Issues](https://github.com/IoanCroitor/saffron-monorepo/issues) sau deschideți un Pull Request.
+
+**Autor:** Ioan Croitor  
+**Email:** ioan.croitor@example.com  
+**Data actualizării:** 29 iulie 2025
+
+---
