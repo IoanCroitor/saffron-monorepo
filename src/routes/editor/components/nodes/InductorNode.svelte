@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
 	let { data, selected = false }: NodeProps = $props();
 
-	let inductance = $derived(data.parameters?.inductance || '1m');
+	let inductance = $derived(data.parameters?.inductance || '1mH');
+	let colors = $derived(getComponentColors('inductor'));
 </script>
 
-<div class="inductor-node {selected ? 'selected' : ''}" role="button" tabindex="0">
-	<Handle type="target" position={Position.Left} class="handle-left" />
-	<Handle type="source" position={Position.Right} class="handle-right" />
+<div class="inductor-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
+	<Handle type="target" position={Position.Left} id="left" class="handle-left" />
+	<Handle type="source" position={Position.Right} id="right" class="handle-right" />
 	
 	<div class="component-body">
-		<ComponentIcon type="inductor" class="w-12 h-6 text-purple-600" />
+		<ComponentIcon type="inductor" class="w-12 h-6" />
 		<div class="component-label">
 			<div class="component-value">{inductance}</div>
 		</div>
@@ -22,7 +24,7 @@
 <style>
 	.inductor-node {
 		background: #f8fafc;
-		border: 2px solid #e2e8f0;
+		border: 2px solid var(--component-border);
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
@@ -33,8 +35,19 @@
 	}
 
 	.inductor-node.selected {
-		border-color: #8b5cf6;
-		box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	/* Dark mode */
+	:global(.dark) .inductor-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .inductor-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	.component-body {
@@ -59,7 +72,7 @@
 	:global(.handle-right) {
 		width: 8px;
 		height: 8px;
-		background: #6b7280;
+		background: var(--component-handle);
 		border: 2px solid white;
 		border-radius: 50%;
 	}
@@ -75,12 +88,12 @@
 	/* Dark mode */
 	:global(.dark) .inductor-node {
 		background: #374151;
-		border-color: #4b5563;
+		border-color: var(--component-border);
 	}
 
 	:global(.dark) .inductor-node.selected {
-		border-color: #8b5cf6;
-		box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	:global(.dark) .component-value {

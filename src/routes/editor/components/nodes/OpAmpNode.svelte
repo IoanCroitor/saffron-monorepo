@@ -1,100 +1,125 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeProps } from '@xyflow/svelte';
+	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
+	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
-	type $$Props = NodeProps;
+	let { data, selected = false }: NodeProps = $props();
 
-	export let data: any;
-	export let selected: boolean = false;
+	let opampType = $derived((data as any)?.parameters?.type || 'LM741');
+	let colors = $derived(getComponentColors('opamp'));
 </script>
 
-<div class="op-amp-node relative bg-slate-50 border-2 border-slate-300 rounded-lg shadow-lg min-w-[80px] min-h-[60px] p-2 {selected ? 'ring-2 ring-slate-500 border-slate-400' : ''}">
-	<!-- Op-Amp Triangle Shape -->
-	<div class="relative w-16 h-12 flex items-center justify-center">
-		<svg width="64" height="48" viewBox="0 0 64 48" class="text-slate-700">
-			<!-- Triangle -->
-			<path d="M8 4 L56 24 L8 44 Z" fill="none" stroke="currentColor" stroke-width="2"/>
-			
-			<!-- + symbol -->
-			<text x="18" y="18" font-size="12" font-weight="bold" text-anchor="middle" fill="currentColor">+</text>
-			
-			<!-- - symbol -->
-			<text x="18" y="32" font-size="14" font-weight="bold" text-anchor="middle" fill="currentColor">−</text>
-		</svg>
+<div class="op-amp-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
+	<Handle type="target" position={Position.Left} id="positive" class="handle-positive" />
+	<Handle type="target" position={Position.Left} id="negative" class="handle-negative" />
+	<Handle type="source" position={Position.Right} id="output" class="handle-output" />
+	<Handle type="target" position={Position.Top} id="vcc" class="handle-vcc" />
+	<Handle type="target" position={Position.Bottom} id="vee" class="handle-vee" />
+	
+	<div class="component-body">
+		<ComponentIcon type="opamp" class="w-12 h-6" />
+		<div class="component-label">
+			<div class="component-value">{opampType}</div>
+		</div>
 	</div>
-
-	<!-- Component Label -->
-	<div class="text-xs font-medium text-center text-slate-700 mt-1">
-		{data.label || 'OpAmp'}
-	</div>
-
-	<!-- Value Display -->
-	<div class="text-xs text-center text-slate-500">
-		Gain: {data.parameters?.gain || '100k'}
-	</div>
-
-	<!-- Handles -->
-	<!-- Non-inverting input (+) -->
-	<Handle
-		type="target"
-		position={Position.Left}
-		id="positive"
-		style="top: 30%; background: #10b981; width: 8px; height: 8px; border: 2px solid white;"
-	/>
-	
-	<!-- Inverting input (-) -->
-	<Handle
-		type="target"
-		position={Position.Left}
-		id="negative"
-		style="top: 70%; background: #ef4444; width: 8px; height: 8px; border: 2px solid white;"
-	/>
-	
-	<!-- Output -->
-	<Handle
-		type="source"
-		position={Position.Right}
-		id="output"
-		style="top: 50%; background: #3b82f6; width: 8px; height: 8px; border: 2px solid white;"
-	/>
-	
-	<!-- VCC (Power Supply +) -->
-	<Handle
-		type="target"
-		position={Position.Top}
-		id="vcc"
-		style="left: 50%; background: #f59e0b; width: 8px; height: 8px; border: 2px solid white;"
-	/>
-	
-	<!-- VEE (Power Supply -) -->
-	<Handle
-		type="target"
-		position={Position.Bottom}
-		id="vee"
-		style="left: 50%; background: #8b5cf6; width: 8px; height: 8px; border: 2px solid white;"
-	/>
 </div>
 
 <style>
 	.op-amp-node {
+		background: #f8fafc;
+		border: 2px solid var(--component-border);
+		border-radius: 8px;
+		padding: 8px;
+		min-width: 80px;
+		position: relative;
 		transition: all 0.2s ease;
+		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 	}
-	
+
+	.op-amp-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
 	/* Dark mode */
 	:global(.dark) .op-amp-node {
-		background: #374151 !important;
-		border-color: #4b5563 !important;
+		background: #374151;
+		border-color: var(--component-border);
 	}
-	
-	:global(.dark) .op-amp-node svg {
-		color: #d1d5db !important;
+
+	:global(.dark) .op-amp-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
-	
-	:global(.dark) .op-amp-node .text-slate-700 {
-		color: #d1d5db !important;
+
+	.component-body {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
 	}
-	
-	:global(.dark) .op-amp-node .text-slate-500 {
-		color: #9ca3af !important;
+
+	.component-label {
+		text-align: center;
+	}
+
+	.component-value {
+		font-size: 10px;
+		font-weight: 600;
+		color: #374151;
+		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+	}
+
+	:global(.handle-positive),
+	:global(.handle-negative),
+	:global(.handle-output),
+	:global(.handle-vcc),
+	:global(.handle-vee) {
+		width: 8px;
+		height: 8px;
+		background: var(--component-handle);
+		border: 2px solid white;
+		border-radius: 50%;
+	}
+
+	:global(.handle-positive) {
+		top: 30%;
+		left: -6px;
+	}
+
+	:global(.handle-negative) {
+		top: 70%;
+		left: -6px;
+	}
+
+	:global(.handle-output) {
+		top: 50%;
+		right: -6px;
+	}
+
+	:global(.handle-vcc) {
+		left: 50%;
+		top: -6px;
+	}
+
+	:global(.handle-vee) {
+		left: 50%;
+		bottom: -6px;
+	}
+
+	/* Dark mode */
+	:global(.dark) .op-amp-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .op-amp-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	:global(.dark) .component-value {
+		color: #d1d5db;
 	}
 </style>

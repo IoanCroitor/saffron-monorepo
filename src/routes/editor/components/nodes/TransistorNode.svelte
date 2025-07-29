@@ -1,23 +1,23 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
 	let { data, selected = false }: NodeProps = $props();
 
-	let transistorType = $derived(data.parameters?.type || '2N3904');
-	let configuration = $derived(data.parameters?.configuration || 'NPN');
+	let transistorType = $derived((data as any)?.parameters?.type || '2N3904');
+	let colors = $derived(getComponentColors('transistor'));
 </script>
 
-<div class="transistor-node {selected ? 'selected' : ''}" role="button" tabindex="0">
-	<Handle type="target" position={Position.Left} class="handle-base" />
-	<Handle type="source" position={Position.Top} class="handle-collector" />
-	<Handle type="source" position={Position.Bottom} class="handle-emitter" />
+<div class="transistor-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
+	<Handle type="target" position={Position.Left} id="base" class="handle-base" />
+	<Handle type="source" position={Position.Top} id="collector" class="handle-collector" />
+	<Handle type="source" position={Position.Bottom} id="emitter" class="handle-emitter" />
 	
 	<div class="component-body">
-		<ComponentIcon type="transistor" class="w-12 h-8 text-emerald-600" />
+		<ComponentIcon type="transistor" class="w-12 h-6" />
 		<div class="component-label">
 			<div class="component-value">{transistorType}</div>
-			<div class="component-type">{configuration}</div>
 		</div>
 	</div>
 </div>
@@ -25,18 +25,30 @@
 <style>
 	.transistor-node {
 		background: #f8fafc;
-		border: 2px solid #e2e8f0;
+		border: 2px solid var(--component-border);
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 	}
 
 	.transistor-node.selected {
-		border-color: #10b981;
-		box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	/* Dark mode */
+	:global(.dark) .transistor-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .transistor-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	.component-body {
@@ -51,16 +63,9 @@
 	}
 
 	.component-value {
-		font-size: 9px;
+		font-size: 10px;
 		font-weight: 600;
 		color: #374151;
-		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-	}
-
-	.component-type {
-		font-size: 8px;
-		font-weight: 500;
-		color: #6b7280;
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 	}
 
@@ -69,7 +74,7 @@
 	:global(.handle-emitter) {
 		width: 8px;
 		height: 8px;
-		background: #6b7280;
+		background: var(--component-handle);
 		border: 2px solid white;
 		border-radius: 50%;
 	}
@@ -80,30 +85,24 @@
 
 	:global(.handle-collector) {
 		top: -6px;
-		background: #dc2626;
 	}
 
 	:global(.handle-emitter) {
 		bottom: -6px;
-		background: #1f2937;
 	}
 
 	/* Dark mode */
 	:global(.dark) .transistor-node {
 		background: #374151;
-		border-color: #4b5563;
+		border-color: var(--component-border);
 	}
 
 	:global(.dark) .transistor-node.selected {
-		border-color: #34d399;
-		box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	:global(.dark) .component-value {
 		color: #d1d5db;
-	}
-
-	:global(.dark) .component-type {
-		color: #9ca3af;
 	}
 </style>

@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
 	let { data, selected = false }: NodeProps = $props();
 
-	let voltage = $derived(data.parameters?.voltage || '5V');
+	let voltage = $derived((data as any)?.parameters?.voltage || '5V');
+	let colors = $derived(getComponentColors('voltageSource'));
 </script>
 
-<div class="voltage-source-node {selected ? 'selected' : ''}" role="button" tabindex="0">
-	<Handle type="source" position={Position.Right} class="handle-positive" />
-	<Handle type="target" position={Position.Left} class="handle-negative" />
+<div class="voltage-source-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
+	<Handle type="source" position={Position.Right} id="left" class="handle-positive" />
+	<Handle type="target" position={Position.Left} id="right" class="handle-negative" />
 	
 	<div class="component-body">
-		<ComponentIcon type="voltageSource" class="w-12 h-6 text-orange-600" />
+		<ComponentIcon type="voltageSource" class="w-12 h-6" />
 		<div class="component-label">
 			<div class="component-value">{voltage}</div>
 		</div>
@@ -22,18 +24,30 @@
 <style>
 	.voltage-source-node {
 		background: #f8fafc;
-		border: 2px solid #e2e8f0;
+		border: 2px solid var(--component-border);
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
 		position: relative;
 		transition: all 0.2s ease;
 		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 	}
 
 	.voltage-source-node.selected {
-		border-color: #f59e0b;
-		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	/* Dark mode */
+	:global(.dark) .voltage-source-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .voltage-source-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	.component-body {
@@ -58,29 +72,28 @@
 	:global(.handle-negative) {
 		width: 8px;
 		height: 8px;
+		background: var(--component-handle);
 		border: 2px solid white;
 		border-radius: 50%;
 	}
 
 	:global(.handle-positive) {
-		background: #dc2626;
 		right: -6px;
 	}
 
 	:global(.handle-negative) {
-		background: #1f2937;
 		left: -6px;
 	}
 
 	/* Dark mode */
 	:global(.dark) .voltage-source-node {
 		background: #374151;
-		border-color: #4b5563;
+		border-color: var(--component-border);
 	}
 
 	:global(.dark) .voltage-source-node.selected {
-		border-color: #fbbf24;
-		box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	:global(.dark) .component-value {

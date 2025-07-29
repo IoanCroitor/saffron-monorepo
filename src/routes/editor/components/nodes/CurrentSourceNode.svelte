@@ -1,58 +1,95 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeProps } from '@xyflow/svelte';
+	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
+	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
-	type $$Props = NodeProps;
+	let { data, selected = false }: NodeProps = $props();
 
-	export let data: any;
-	export let selected: boolean = false;
+	let current = $derived((data as any)?.parameters?.current || '1mA');
+	let colors = $derived(getComponentColors('currentSource'));
 </script>
 
-<div class="current-source-node relative bg-slate-50 dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg min-w-[100px] min-h-[60px] p-3 {selected ? 'ring-2 ring-yellow-500 border-yellow-400' : ''}">>
-	<!-- Current Source Symbol -->
-	<div class="relative w-16 h-12 flex items-center justify-center">
-		<svg width="64" height="48" viewBox="0 0 64 48" class="text-yellow-600 dark:text-yellow-400">
-			<circle cx="32" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="2"/>
-			<!-- Arrow indicating current direction -->
-			<path d="M24 24 L40 24" stroke="currentColor" stroke-width="2" marker-end="url(#arrow-current)"/>
-			<path d="M28 20 L32 24 L28 28" stroke="currentColor" stroke-width="2" fill="none"/>
-		</svg>
-		
-		<!-- Arrow marker definition -->
-		<svg style="position: absolute; width: 0; height: 0;">
-			<defs>
-				<marker id="arrow-current" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-					<path d="M0,0 L0,6 L9,3 z" fill="currentColor"/>
-				</marker>
-			</defs>
-		</svg>
-	</div>
-
-	<!-- Component Label -->
-	<div class="text-xs font-medium text-center text-yellow-700 dark:text-yellow-300 mt-1">
-		{data.label || 'I'}
-	</div>
-
-	<!-- Value Display -->
-	<div class="text-xs text-center text-yellow-600 dark:text-yellow-400">
-		{data.parameters?.current || '1A'}
-	</div>
-
-	<!-- Handles -->
+<div class="current-source-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
 	<Handle
 		type="source"
 		position={Position.Left}
-		style="background: #eab308; width: 8px; height: 8px; border: 2px solid white;"
+		id="left"
+		style="background: var(--component-handle); width: 8px; height: 8px; border: 2px solid white;"
 	/>
 	<Handle
 		type="target"
 		position={Position.Right}
-		style="background: #eab308; width: 8px; height: 8px; border: 2px solid white;"
+		id="right"
+		style="background: var(--component-handle); width: 8px; height: 8px; border: 2px solid white;"
 	/>
+	
+	<div class="component-body">
+		<ComponentIcon type="currentSource" class="w-12 h-6" />
+		<div class="component-label">
+			<div class="component-value">{current}</div>
+		</div>
+	</div>
 </div>
 
 <style>
 	.current-source-node {
+		background: #f8fafc;
+		border: 2px solid var(--component-border);
+		border-radius: 8px;
+		padding: 8px;
+		min-width: 80px;
+		position: relative;
 		transition: all 0.2s ease;
+		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+	}
+
+	.current-source-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	/* Dark mode */
+	:global(.dark) .current-source-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .current-source-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	.component-body {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.component-label {
+		text-align: center;
+	}
+
+	.component-value {
+		font-size: 10px;
+		font-weight: 600;
+		color: #374151;
+		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+	}
+
+	/* Dark mode */
+	:global(.dark) .current-source-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .current-source-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	:global(.dark) .component-value {
+		color: #d1d5db;
 	}
 </style>

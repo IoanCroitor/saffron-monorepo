@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getComponentIconClass } from '../utils/component-colors';
+	
 	interface Props {
 		type: string;
 		class?: string;
@@ -6,23 +8,7 @@
 
 	let { type, class: className = '' }: Props = $props();
 
-	// Color mapping for different component types
-	const componentColors = {
-		resistor: 'text-red-500',
-		capacitor: 'text-blue-500',
-		inductor: 'text-green-500',
-		voltageSource: 'text-orange-500',
-		currentSource: 'text-purple-500',
-		ground: 'text-gray-600 dark:text-gray-400',
-		diode: 'text-yellow-500',
-		transistor: 'text-indigo-500',
-		opamp: 'text-pink-500',
-		voltmeter: 'text-cyan-500',
-		ammeter: 'text-emerald-500',
-		probe: 'text-rose-500'
-	};
-
-	let iconColor = $derived(componentColors[type as keyof typeof componentColors] || 'text-foreground');
+	let iconColor = $derived(getComponentIconClass(type as any));
 </script>
 
 {#if type === 'resistor'}

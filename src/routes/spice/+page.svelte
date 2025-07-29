@@ -28,6 +28,9 @@
 		XCircle
 	} from '@lucide/svelte';
 
+	// Props from server
+	export let data;
+
 	// Functions for simulation results
 	function copyNetlist(netlist: string) {
 		navigator.clipboard.writeText(netlist);
@@ -43,6 +46,59 @@
 		a.click();
 		document.body.removeChild(a);
 		URL.revokeObjectURL(url);
+	}
+
+	function exportResults(format: 'csv' | 'json', filename: string) {
+		if (!resultArray || !resultArray.results.length) return;
+		
+		const results = resultArray.results[0];
+		let content: string;
+		let mimeType: string;
+		let extension: string;
+		
+		if (format === 'csv') {
+			content = convertToCSV(results);
+			mimeType = 'text/csv';
+			extension = 'csv';
+		} else {
+			content = JSON.stringify(results, null, 2);
+			mimeType = 'application/json';
+			extension = 'json';
+		}
+		
+		const blob = new Blob([content], { type: mimeType });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${filename}.${extension}`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+
+	function convertToCSV(results: any): string {
+		if (!results.variableNames || !results.data) return '';
+		
+		const headers = results.variableNames.join(',');
+		const rows: string[] = [];
+		
+		// Get the maximum length of any data array
+		const maxLength = Math.max(...results.data.map((d: any) => d.values?.length || 0));
+		
+		for (let i = 0; i < maxLength; i++) {
+			const row = results.data.map((d: any) => {
+				const value = d.values?.[i];
+				if (typeof value === 'object' && value !== null) {
+					// Handle complex numbers
+					return value.real !== undefined ? value.real : JSON.stringify(value);
+				}
+				return value || '';
+			});
+			rows.push(row.join(','));
+		}
+		
+		return [headers, ...rows].join('\n');
 	}
 const examples = [
 	{
@@ -235,7 +291,8 @@ vdd vdd 0 1.8
 	}
 ];
 
-	let netlistCode = `Basic RLC circuit
+	// Initialize variables from server data or defaults
+	let netlistCode = data.netlist || `Basic RLC circuit
 .include modelcard.CMOS90
 
 r vdd 2 100.0
@@ -253,11 +310,19 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	let displayData: DisplayDataType[] = [];
 	let isRunning = false;
 	let errorMessage = '';
-	let threads = navigator?.hardwareConcurrency || 4;
-	let theme: 'light' | 'dark' = 'dark';
+	let threads = data.threads || navigator?.hardwareConcurrency || 4;
+	let theme: 'light' | 'dark' = data.theme || 'dark';
 	let simArray: SimArray;
 	let isInitialized = false;
-	let plotType: 'webgl' | 'd3' = 'd3'; // Default to D3 for better compatibility
+	let plotType: 'webgl' | 'd3' = data.plotType || 'd3';
+	
+	// UI state from server data
+	let showGrid = data.showGrid;
+	let showCrosshair = data.showCrosshair;
+	let measurementMode = data.measurementMode;
+	let lockedSignal = data.lockedSignal;
+	let autoRun = data.autoRun;
+	let readOnly = data.readOnly;
 
 	onMount(async () => {
 		if (browser) {
@@ -274,13 +339,29 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 				isInitialized = false;
 			}
 			
-			// Theme detection
-			const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-			theme = mediaQuery.matches ? 'dark' : 'light';
+			// Handle example selection from URL
+			if (data.example) {
+				const selectedExample = examples.find(ex => ex.value === data.example);
+				if (selectedExample) {
+					netlistCode = selectedExample.code;
+					console.log(`Loaded example: ${selectedExample.name}`);
+				}
+			}
 			
-			mediaQuery.addEventListener('change', (e) => {
-				theme = e.matches ? 'dark' : 'light';
-			});
+			// Theme detection (only if not set by URL)
+			if (!data.theme) {
+				const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+				theme = mediaQuery.matches ? 'dark' : 'light';
+				
+				mediaQuery.addEventListener('change', (e) => {
+					theme = e.matches ? 'dark' : 'light';
+				});
+			}
+			
+			// Auto-run simulation if requested
+			if (autoRun && isInitialized && netlistCode.trim()) {
+				setTimeout(() => runSimulation(), 100);
+			}
 		}
 	});
 
@@ -293,13 +374,36 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		displayData = [];
 
 		try {
-			const parser = getParser(netlistCode);
+			// Apply simulation parameters from URL if provided
+			let modifiedNetlist = netlistCode;
+			
+			// Modify time step if specified
+			if (data.timeStep) {
+				modifiedNetlist = modifiedNetlist.replace(/\.tran\s+[\d.]+/, `.tran ${data.timeStep}`);
+			}
+			
+			// Modify end time if specified
+			if (data.endTime) {
+				modifiedNetlist = modifiedNetlist.replace(/\.tran\s+[\d.]+\s+[\d.]+/, `.tran ${data.timeStep || '0.1'} ${data.endTime}`);
+			}
+			
+			// Modify simulation type if specified
+			if (data.simulationType && data.simulationType !== 'transient') {
+				// Replace .tran with .ac or .dc based on type
+				if (data.simulationType === 'ac') {
+					modifiedNetlist = modifiedNetlist.replace(/\.tran\s+[\d.]+\s+[\d.]+/, '.ac dec 10 1 1meg');
+				} else if (data.simulationType === 'dc') {
+					modifiedNetlist = modifiedNetlist.replace(/\.tran\s+[\d.]+\s+[\d.]+/, '.dc vin 0 5 0.1');
+				}
+			}
+			
+			const parser = getParser(modifiedNetlist);
 			console.log('Parser result:', parser);
 
 			if (parser.sweep) {
-				await simArray.runSweep(netlistCode, threads);
+				await simArray.runSweep(modifiedNetlist, threads);
 			} else {
-				await simArray.run(netlistCode);
+				await simArray.run(modifiedNetlist);
 			}
 
 			const results = simArray.getResults();
@@ -307,6 +411,31 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			if (results && results.results.length > 0) {
 				resultArray = results;
 				displayData = makeDD(results.results[0], theme);
+				
+				// Apply signal visibility settings from URL parameters
+				if (data.visibleSignals.length > 0 || data.hiddenSignals.length > 0) {
+					displayData = displayData.map(signal => {
+						// If specific signals are marked as visible, hide all others
+						if (data.visibleSignals.length > 0) {
+							signal.visible = data.visibleSignals.includes(signal.name);
+						}
+						// If specific signals are marked as hidden, hide them
+						if (data.hiddenSignals.length > 0) {
+							if (data.hiddenSignals.includes(signal.name)) {
+								signal.visible = false;
+							}
+						}
+						return signal;
+					});
+				}
+				
+				// Auto-export results if requested
+				if (data.exportFormat && data.exportFilename && (data.exportFormat === 'csv' || data.exportFormat === 'json')) {
+					setTimeout(() => {
+						exportResults(data.exportFormat as 'csv' | 'json', data.exportFilename);
+					}, 500);
+				}
+				
 				console.log('Simulation completed successfully');
 			} else {
 				throw new Error('No simulation results generated');
@@ -382,9 +511,9 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			<button 
 				class="run-btn"
 				class:running={isRunning}
-				class:disabled={!isInitialized}
+				class:disabled={!isInitialized || readOnly}
 				on:click={runSimulation}
-				disabled={isRunning || !isInitialized}
+				disabled={isRunning || !isInitialized || readOnly}
 			>
 				{#if isRunning}
 					<div class="spinner"></div>
@@ -440,10 +569,15 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 				</div>
 				
 				<div class="netlist-editor-container">
+					{#if readOnly}
+						<div class="readonly-notice">
+							<p>Read-only mode - Circuit loaded from URL parameters</p>
+						</div>
+					{/if}
 					<SpiceEditor 
 						value={netlistCode}
 						{theme}
-						on:change={(e) => onCodeChange(e.detail)}
+						on:change={(e) => !readOnly && onCodeChange(e.detail)}
 					/>
 				</div>
 			</div>
@@ -1012,5 +1146,21 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 
 	.empty-state > * + * {
 		margin-top: 0.5rem;
+	}
+
+	.readonly-notice {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: 4px;
+		padding: 0.5rem;
+		margin-bottom: 0.5rem;
+		text-align: center;
+	}
+
+	.readonly-notice p {
+		margin: 0;
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		font-style: italic;
 	}
 </style>

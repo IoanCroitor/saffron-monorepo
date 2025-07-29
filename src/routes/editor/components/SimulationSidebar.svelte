@@ -23,6 +23,7 @@
     import type { Node, Edge } from '@xyflow/svelte';
     import { onMount, onDestroy } from 'svelte';
     import { simulationStore, simulationConfigurationsStore } from '../stores/simulation-store';
+    import { goto } from '$app/navigation';
 
     interface Props {
         nodes: Node[];
@@ -99,7 +100,6 @@
             return;
         }
 
-        simulationStore.setRunning(true);
         try {
             const componentData = nodes.map(node => ({
                 id: node.id,
@@ -118,29 +118,15 @@
 
             const config = simulationConfigs[type as keyof typeof simulationConfigs];
             generatedNetlist = circuitSimulator.generateNetlist(componentData, connectionData, config);
-            const result = await circuitSimulator.simulate(generatedNetlist, config);
-
-            if (result.success) {
-                const run = {
-                    id: `sim_${Date.now()}`,
-                    name: simulationName,
-                    type: type as 'dc' | 'ac' | 'transient',
-                    config,
-                    result,
-                    timestamp: new Date(),
-                    netlist: generatedNetlist
-                };
-                
-                simulationStore.addRun(run);
-                // Don't clear the name - let it persist for the next run
-            } else {
-                alert(`Simulation failed: ${result.error}`);
-            }
+            
+            // Redirect to spice page with the netlist
+            const encodedNetlist = encodeURIComponent(generatedNetlist);
+            const encodedName = encodeURIComponent(simulationName);
+            await goto(`/spice?netlist=${encodedNetlist}&name=${encodedName}`);
+            
         } catch (error) {
-            console.error('Simulation error:', error);
-            alert('Simulation failed. Please check your circuit configuration.');
-        } finally {
-            simulationStore.setRunning(false);
+            console.error('Netlist generation error:', error);
+            alert('Failed to generate netlist. Please check your circuit configuration.');
         }
     }
 
@@ -271,15 +257,11 @@
                                     <Button 
                                         size="sm" 
                                         onclick={() => runSimulation(type)}
-                                        disabled={$simulationStore.isRunning || nodes.length === 0}
+                                        disabled={nodes.length === 0}
                                         class="h-7 px-3 text-xs font-medium"
                                     >
-                                        {#if $simulationStore.isRunning}
-                                            <div class="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                                        {:else}
-                                            <Play class="w-3 h-3 mr-1" />
-                                        {/if}
-                                        Run
+                                        <Play class="w-3 h-3 mr-1" />
+                                        Run in SPICE
                                     </Button>
                                 </div>
                             </CardHeader>

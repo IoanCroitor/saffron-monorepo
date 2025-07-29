@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
 	let { data, selected = false }: NodeProps = $props();
 
-	let capacitance = $derived(data.parameters?.capacitance || '1μ');
+	let capacitance = $derived((data as any)?.parameters?.capacitance || '1μ');
+	let colors = $derived(getComponentColors('capacitor'));
 </script>
 
-<div class="capacitor-node {selected ? 'selected' : ''}" role="button" tabindex="0">
-	<Handle type="target" position={Position.Left} class="handle-left" />
-	<Handle type="source" position={Position.Right} class="handle-right" />
+<div class="capacitor-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
+	<Handle type="target" position={Position.Left} id="left" class="handle-left" />
+	<Handle type="source" position={Position.Right} id="right" class="handle-right" />
 	
 	<div class="component-body">
-		<ComponentIcon type="capacitor" class="w-12 h-6 text-green-600" />
+		<ComponentIcon type="capacitor" class="w-12 h-6" />
 		<div class="component-label">
 			<div class="component-value">{capacitance}</div>
 		</div>
@@ -22,7 +24,7 @@
 <style>
 	.capacitor-node {
 		background: #f8fafc;
-		border: 2px solid #e2e8f0;
+		border: 2px solid var(--component-border);
 		border-radius: 8px;
 		padding: 8px;
 		min-width: 80px;
@@ -32,18 +34,16 @@
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 	}
 
-
-
 	.capacitor-node.selected {
-		border-color: #16a34a;
-		box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 		background: #f1f5f9;
 	}
 
 	/* Dark mode */
 	:global(.dark) .capacitor-node {
 		background: #374151;
-		border-color: #4b5563;
+		border-color: var(--component-border);
 	}
 
 	.component-body {
@@ -68,7 +68,7 @@
 	:global(.handle-right) {
 		width: 8px;
 		height: 8px;
-		background: #6b7280;
+		background: var(--component-handle);
 		border: 2px solid white;
 		border-radius: 50%;
 	}
@@ -84,12 +84,12 @@
 	/* Dark mode */
 	:global(.dark) .capacitor-node {
 		background: #1f2937;
-		border-color: #374151;
+		border-color: var(--component-border);
 	}
 
 	:global(.dark) .capacitor-node.selected {
-		border-color: #60a5fa;
-		box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
 	}
 
 	:global(.dark) .component-value {

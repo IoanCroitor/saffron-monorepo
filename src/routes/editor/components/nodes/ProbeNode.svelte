@@ -1,38 +1,89 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeProps } from '@xyflow/svelte';
+	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
+	import ComponentIcon from '../ComponentIcon.svelte';
+	import { getComponentColors } from '../../utils/component-colors';
 
-	type $$Props = NodeProps;
+	let { data, selected = false }: NodeProps = $props();
 
-	export let data: any;
-	export let selected: boolean = false;
+	let impedance = $derived((data as any)?.parameters?.impedance || '1M');
+	let colors = $derived(getComponentColors('probe'));
 </script>
 
-<div class="probe-node relative bg-slate-50 dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg min-w-[60px] min-h-[40px] p-2 {selected ? 'ring-2 ring-purple-500 border-purple-400' : ''}">
-	<!-- Probe Symbol -->
-	<div class="relative w-8 h-6 flex items-center justify-center mx-auto">
-		<svg width="32" height="24" viewBox="0 0 32 24" class="text-purple-600 dark:text-purple-400">
-			<circle cx="24" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
-			<line x1="8" y1="12" x2="18" y2="12" stroke="currentColor" stroke-width="2"/>
-			<polygon points="8,8 8,16 12,12" fill="currentColor"/>
-		</svg>
-	</div>
-
-	<!-- Component Label -->
-	<div class="text-xs font-medium text-center text-purple-700 dark:text-purple-300 mt-1">
-		{data.label || 'PROBE'}
-	</div>
-
-	<!-- Handle -->
+<div class="probe-node {selected ? 'selected' : ''}" role="button" tabindex="0" style="--component-border: {colors.border}; --component-selected-border: {colors.selectedBorder}; --component-selected-shadow: {colors.selectedShadow}; --component-handle: {colors.handle};">
 	<Handle
 		type="target"
 		position={Position.Left}
-		style="background: #a855f7; width: 8px; height: 8px; border: 2px solid white;"
+		id="center"
+		style="background: var(--component-handle); width: 8px; height: 8px; border: 2px solid white;"
 	/>
+	
+	<div class="component-body">
+		<ComponentIcon type="probe" class="w-12 h-6" />
+		<div class="component-label">
+			<div class="component-value">{impedance}</div>
+		</div>
+	</div>
 </div>
 
 <style>
 	.probe-node {
+		background: #f8fafc;
+		border: 2px solid var(--component-border);
+		border-radius: 8px;
+		padding: 8px;
+		min-width: 80px;
+		position: relative;
 		transition: all 0.2s ease;
+		cursor: pointer;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+	}
+
+	.probe-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	/* Dark mode */
+	:global(.dark) .probe-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .probe-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	.component-body {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.component-label {
+		text-align: center;
+	}
+
+	.component-value {
+		font-size: 10px;
+		font-weight: 600;
+		color: #374151;
+		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+	}
+
+	/* Dark mode */
+	:global(.dark) .probe-node {
+		background: #374151;
+		border-color: var(--component-border);
+	}
+
+	:global(.dark) .probe-node.selected {
+		border-color: var(--component-selected-border);
+		box-shadow: 0 0 0 2px var(--component-selected-shadow);
+	}
+
+	:global(.dark) .component-value {
+		color: #d1d5db;
 	}
 </style>

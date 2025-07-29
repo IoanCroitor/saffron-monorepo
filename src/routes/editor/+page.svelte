@@ -36,9 +36,11 @@
 	import CollaborationDialog from './components/CollaborationDialog.svelte';
 	import SimulationSidebar from './components/SimulationSidebar.svelte';
 	import SaveIndicator from './components/SaveIndicator.svelte';
+
 	import { settingsStore } from './stores/settings-store';
 	import { simulationConfigurationsStore } from './stores/simulation-store';
 	import { circuitAPI } from './services/circuit-api';
+	import { validateConnection, validateCircuit, checkForShortCircuit } from './services/connection-validation';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
@@ -257,6 +259,9 @@
 	let showDebugMenu = $state(false);
 	let showSimulation = $state(false);
 	let showProperties = $state(true);
+	
+	// Connection validation state
+
 	let currentProjectId = $state<string | null>(null);
 	let currentProjectName = $state<string>('Untitled Circuit');
 	let dragUpdateTimeout: ReturnType<typeof setTimeout>;
@@ -312,6 +317,26 @@
 		selectedWire = null;
 		hasUnsavedChanges = false;
 		console.log('[EDITOR] Circuit cleared');
+	}
+
+	function validateCurrentCircuit() {
+		const validation = validateCircuit(nodes, edges);
+		
+		if (!validation.valid) {
+			console.error('[EDITOR] Circuit validation errors:', validation.errors);
+			alert(`Circuit Validation Errors:\n${validation.errors.join('\n')}`);
+		}
+		
+		if (validation.warnings.length > 0) {
+			console.warn('[EDITOR] Circuit validation warnings:', validation.warnings);
+			alert(`Circuit Validation Warnings:\n${validation.warnings.join('\n')}`);
+		}
+		
+		if (validation.valid && validation.warnings.length === 0) {
+			alert('Circuit validation passed! No errors or warnings found.');
+		}
+		
+		return validation;
 	}
 
 	// Component operations for PropertiesSidebar
@@ -849,6 +874,43 @@
 	}
 
 	function onConnect(params: any) {
+		// Find the source and target nodes
+		const sourceNode = nodes.find(n => n.id === params.source);
+		const targetNode = nodes.find(n => n.id === params.target);
+
+		if (!sourceNode || !targetNode) {
+			console.error('[EDITOR] Source or target node not found:', { source: params.source, target: params.target });
+			return;
+		}
+
+		// Validate the connection
+		const validation = validateConnection(
+			sourceNode,
+			params.sourceHandle || 'left',
+			targetNode,
+			params.targetHandle || 'left'
+		);
+
+		if (!validation.valid) {
+			console.error('[EDITOR] Connection validation failed:', validation.error);
+			return;
+		}
+
+		// Check for short circuit
+		const hasShortCircuit = checkForShortCircuit(
+			nodes,
+			edges,
+			sourceNode,
+			params.sourceHandle || 'left',
+			targetNode,
+			params.targetHandle || 'left'
+		);
+
+		if (hasShortCircuit) {
+			console.error('[EDITOR] Short circuit detected');
+			return;
+		}
+
 		// Generate unique edge ID to prevent conflicts when connecting same nodes multiple times
 		const timestamp = Date.now();
 		const newEdge = {
@@ -859,9 +921,11 @@
 			targetHandle: params.targetHandle,
 			type: 'wire',
 			data: { 
-				color: '#64748b', 
+				color: validation.connectionType === 'power' ? '#f59e0b' : 
+					   validation.connectionType === 'ground' ? '#6b7280' : '#64748b',
 				wireShape: 'smoothstep', 
-				wireStyle: 'solid' 
+				wireStyle: 'solid',
+				connectionType: validation.connectionType
 			}
 		};
 
@@ -1402,6 +1466,22 @@
 					</span>
 				{/if}
 			</button>
+
+			<button
+				onclick={validateCurrentCircuit}
+				class="text-muted-foreground bg-secondary border-border hover:bg-secondary/80 flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+				title="Validate Circuit"
+			>
+				<svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
+				</svg>
+				Validate
+			</button>
 		</div>
 	</div>
 
@@ -1508,16 +1588,18 @@
 									alwaysVisible={true}
 								/>
 							</span>
+
 						</div>
 					{:else if nodes.length > 0 || edges.length > 0}
 						<!-- Non-collaborative save indicator -->
-						<div class="flex items-center justify-center">
+						<div class="flex items-center justify-center gap-4">
 							<SaveIndicator 
 								{hasUnsavedChanges}
 								{isAutoSaving}
 								compact={false}
 								alwaysVisible={true}
 							/>
+
 						</div>
 					{/if}
 				</Panel>

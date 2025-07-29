@@ -219,9 +219,7 @@
 			.on('mouseover', handleMouseOver)
 			.on('mousemove', handleMouseMove)
 			.on('mouseout', handleMouseOut)
-			.on('click', handleClick)
-			.on('mousedown', handleMouseDown)
-			.on('mouseup', handleMouseUp);
+			.on('click', handleClick);
 
 		updatePlot();
 	}
@@ -649,8 +647,7 @@
 				const closestPoint = data[closestIndex];
 				nearestSignalValue = {
 					signal: lockedSignal,
-					value: closestPoint.y,
-					x: closestPoint.x
+					value: closestPoint.y
 				};				} else {
 					nearestSignalValue = null;
 				}
@@ -965,7 +962,15 @@
 			}
 		});
 		
-		return nearest ? { signal: nearest.signal, value: nearest.value, x: nearest.x } : null;
+		if (nearest) {
+			const result: { signal: string, value: number, x: number } = {
+				signal: nearest.signal,
+				value: nearest.value,
+				x: nearest.x
+			};
+			return result;
+		}
+		return null;
 	}
 
 	function snapToNearestSignal(x: number, y: number): { x: number, y: number, signal?: string } {
