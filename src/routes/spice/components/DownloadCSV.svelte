@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { ResultArrayType } from '../lib/simulationArray';
 	import type { DisplayDataType } from '../lib/displayData';
+	import { Input } from '$lib/components/ui/input';
+	import { Download } from '@lucide/svelte';
 
 	export let resultArray: ResultArrayType | undefined = undefined;
 	export let displayData: DisplayDataType[] = [];
@@ -150,205 +152,34 @@
 			isGenerating = false;
 		}
 	}
-
-	function getDataInfo(): string {
-		if (!resultArray || !resultArray.results || resultArray.results.length === 0) {
-			return 'No data';
-		}
-
-		const totalPoints = resultArray.results.reduce((sum: number, result) => {
-			return sum + (result.numPoints || 0);
-		}, 0);
-
-		const allSignals = new Set<string>();
-		for (const result of resultArray.results) {
-			if (result.variableNames) {
-				result.variableNames.forEach(name => {
-					if (name !== 'x') allSignals.add(name);
-				});
-			}
-		}
-
-		return `${totalPoints} data points, ${allSignals.size} signals`;
-	}
 </script>
 
-<div class="download-csv">
-	<div class="info">
-		<span class="data-info">{getDataInfo()}</span>
+<div class="space-y-2">
+	<div class="text-sm font-medium text-muted-foreground">
+		Export Results
 	</div>
 	
-	<div class="controls">
-		<input
+	<div class="flex gap-2 items-center">
+		<Input
 			type="text"
 			bind:value={filename}
 			placeholder="filename"
-			class="filename-input"
 			disabled={isGenerating}
+			class="flex-1"
 		/>
 		
 		<button
 			type="button"
-			class="download-button"
+			class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3"
 			on:click={downloadCSV}
 			disabled={isGenerating || !resultArray || !resultArray.results || resultArray.results.length === 0}
+			title="Download CSV"
 		>
 			{#if isGenerating}
-				<span class="spinner"></span>
-				Generating...
+				<div class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
 			{:else}
-				<svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-					<polyline points="7,10 12,15 17,10"/>
-					<line x1="12" y1="15" x2="12" y2="3"/>
-				</svg>
-				Download CSV
+				<Download class="w-4 h-4" />
 			{/if}
 		</button>
 	</div>
-</div>
-
-<style>
-	.download-csv {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem;
-		background: var(--bg-secondary, #f8f9fa);
-		border: 1px solid var(--border-color, #dee2e6);
-		border-radius: 8px;
-		font-family: var(--font-mono, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace);
-	}
-
-	.info {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.data-info {
-		font-size: 0.9rem;
-		color: var(--text-muted, #6c757d);
-		font-weight: 500;
-	}
-
-	.controls {
-		display: flex;
-		gap: 0.75rem;
-		align-items: center;
-	}
-
-	.filename-input {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--border-color, #dee2e6);
-		border-radius: 6px;
-		background: var(--bg-primary, #ffffff);
-		color: var(--text-color, #2d3748);
-		font-family: inherit;
-		font-size: 0.9rem;
-		transition: border-color 0.2s ease;
-	}
-
-	.filename-input:focus {
-		outline: none;
-		border-color: var(--primary-color, #3182ce);
-		box-shadow: 0 0 0 3px var(--primary-color-alpha, rgba(49, 130, 206, 0.1));
-	}
-
-	.filename-input:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.download-button {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 1rem;
-		background: var(--primary-color, #3182ce);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-family: inherit;
-		font-size: 0.9rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		white-space: nowrap;
-	}
-
-	.download-button:hover:not(:disabled) {
-		background: var(--primary-color-hover, #2c5aa0);
-		transform: translateY(-1px);
-	}
-
-	.download-button:active:not(:disabled) {
-		transform: translateY(0);
-	}
-
-	.download-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		transform: none;
-	}
-
-	.download-icon {
-		width: 16px;
-		height: 16px;
-		flex-shrink: 0;
-	}
-
-	.spinner {
-		width: 16px;
-		height: 16px;
-		border: 2px solid transparent;
-		border-top: 2px solid currentColor;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	/* Dark theme */
-	:global(.dark) .download-csv {
-		background: var(--bg-secondary-dark, #2d3748);
-		border-color: var(--border-color-dark, #4a5568);
-		color: var(--text-color-dark, #e2e8f0);
-	}
-
-	:global(.dark) .data-info {
-		color: var(--text-muted-dark, #a0aec0);
-	}
-
-	:global(.dark) .filename-input {
-		background: var(--bg-primary-dark, #1a202c);
-		border-color: var(--border-color-dark, #4a5568);
-		color: var(--text-color-dark, #e2e8f0);
-	}
-
-	:global(.dark) .filename-input:focus {
-		border-color: var(--primary-color-dark, #63b3ed);
-		box-shadow: 0 0 0 3px var(--primary-color-alpha-dark, rgba(99, 179, 237, 0.1));
-	}
-
-	@media (max-width: 768px) {
-		.controls {
-			flex-direction: column;
-			align-items: stretch;
-		}
-
-		.filename-input {
-			flex: none;
-		}
-
-		.download-button {
-			justify-content: center;
-		}
-	}
-</style>
+</div> 

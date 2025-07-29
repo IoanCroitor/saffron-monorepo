@@ -10,43 +10,32 @@
 	import type { DisplayDataType } from './lib/displayData';
 	import { makeDD } from './lib/displayData';
 	import { getParser } from './lib/parserDC';
-	import { simulationStore } from '../editor/stores/simulation-store';
-	import { Card, CardHeader, CardContent } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
+	// shadcn-svelte components
 	import { Badge } from '$lib/components/ui/badge';
-	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+
 	import { 
 		Copy, 
 		Download, 
 		Trash2, 
-		Clock, 
-		Zap, 
-		TrendingUp,
 		CircuitBoard,
 		FileText,
-		CheckCircle,
-		XCircle
+		XCircle,
+		Play,
+		Square,
+		Settings,
+		Maximize2,
+		Minimize2,
+		Ruler,
+		Eye,
+		GripVertical
 	} from '@lucide/svelte';
 
 	// Props from server
 	export let data;
 
-	// Functions for simulation results
-	function copyNetlist(netlist: string) {
-		navigator.clipboard.writeText(netlist);
-	}
 
-	function downloadNetlist(netlist: string, name: string) {
-		const blob = new Blob([netlist], { type: 'text/plain' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${name}_netlist.cir`;
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}
 
 	function exportResults(format: 'csv' | 'json', filename: string) {
 		if (!resultArray || !resultArray.results.length) return;
@@ -100,51 +89,52 @@
 		
 		return [headers, ...rows].join('\n');
 	}
-const examples = [
-	{
-		name: 'Fast Series RLC Resonant Circuit',
-		category: 'Basic Circuits',
-		description: 'High-speed RLC resonant circuit with picosecond timing',
-		value: 'fast-series-rlc',
-		code: `FAST SERIES RLC RESONANT CIRCUIT
+
+	const examples = [
+		{
+			name: 'Fast Series RLC Resonant Circuit',
+			category: 'Basic Circuits',
+			description: 'High-speed RLC resonant circuit with picosecond timing',
+			value: 'fast-series-rlc',
+			code: `FAST SERIES RLC RESONANT CIRCUIT
 r1 vin n1 1
 l1 n1 n2 1u
 c1 n2 0 1n
 vin vin 0 pulse(0 1 0 1p 1p 10p 20p)
 .tran 1p 100p
 .end`
-	},
-	{
-		name: 'Fast Parallel RLC Tank',
-		category: 'Basic Circuits',
-		description: 'Parallel RLC tank circuit with current source',
-		value: 'fast-parallel-rlc',
-		code: `FAST PARALLEL RLC TANK
-i1 0 tank 0 pulse(0 1m 0 1p 1p 5p 10p) ; Changed DC value from 1m to 0
+		},
+		{
+			name: 'Fast Parallel RLC Tank',
+			category: 'Basic Circuits',
+			description: 'Parallel RLC tank circuit with current source',
+			value: 'fast-parallel-rlc',
+			code: `FAST PARALLEL RLC TANK
+i1 0 tank 0 pulse(0 1m 0 1p 1p 5p 10p)
 r1 tank 0 100
 l1 tank 0 100n
 c1 tank 0 1p
 .tran 0.1p 50p
 .end`
-	},
-	{
-		name: 'Fast RC Filter',
-		category: 'Filters',
-		description: 'Simple RC low-pass filter with fast response',
-		value: 'fast-rc-filter',
-		code: `FAST RC FILTER
+		},
+		{
+			name: 'Fast RC Filter',
+			category: 'Filters',
+			description: 'Simple RC low-pass filter with fast response',
+			value: 'fast-rc-filter',
+			code: `FAST RC FILTER
 vin vin 0 pulse(0 1 0 1p 1p 5p 10p)
 r1 vin out 1k
 c1 out 0 1p
 .tran 0.1p 30p
 .end`
-	},
-	{
-		name: 'Fast LC Oscillator',
-		category: 'Oscillators',
-		description: 'LC oscillator using CMOS transistors',
-		value: 'fast-lc-oscillator',
-		code: `FAST LC OSCILLATOR
+		},
+		{
+			name: 'Fast LC Oscillator',
+			category: 'Oscillators',
+			description: 'LC oscillator using CMOS transistors',
+			value: 'fast-lc-oscillator',
+			code: `FAST LC OSCILLATOR
 .include modelcard.CMOS90
 m1 vdd gate out out P90 W=10u L=0.09u
 m2 out gate 0 0 N90 W=5u L=0.09u
@@ -152,15 +142,15 @@ l1 out fb 10n
 c1 fb 0 0.1p
 r1 vdd gate 10k
 vdd vdd 0 1.8
-.tran 0.1p 20p uic ; Added uic for potentially better oscillator startup
+.tran 0.1p 20p uic
 .end`
-	},
-	{
-		name: 'Fast Inverter Chain',
-		category: 'Digital Circuits',
-		description: 'CMOS inverter chain with timing analysis',
-		value: 'fast-inverter-chain',
-		code: `FAST INVERTER CHAIN
+		},
+		{
+			name: 'Fast Inverter Chain',
+			category: 'Digital Circuits',
+			description: 'CMOS inverter chain with timing analysis',
+			value: 'fast-inverter-chain',
+			code: `FAST INVERTER CHAIN
 .include modelcard.CMOS90
 m1 vdd in out1 out1 P90 W=4u L=0.09u
 m2 out1 in 0 0 N90 W=2u L=0.09u
@@ -172,53 +162,53 @@ vin in 0 pulse(0 1.8 0 0.1p 0.1p 2p 4p)
 vdd vdd 0 1.8
 .tran 0.01p 10p
 .end`
-	},
-	{
-		name: 'Fast RLC Damped Oscillation',
-		category: 'Basic Circuits',
-		description: 'RLC circuit showing damped oscillation behavior',
-		value: 'fast-rlc-damped',
-		code: `FAST RLC DAMPED OSCILLATION
+		},
+		{
+			name: 'Fast RLC Damped Oscillation',
+			category: 'Basic Circuits',
+			description: 'RLC circuit showing damped oscillation behavior',
+			value: 'fast-rlc-damped',
+			code: `FAST RLC DAMPED OSCILLATION
 r1 n1 n2 10
 l1 n2 n3 100n
 c1 n3 0 10f
-i1 0 n1 0 pulse(0 1m 0 0.1p 0.1p 1p 20p) ; Changed DC value from 1m to 0
+i1 0 n1 0 pulse(0 1m 0 0.1p 0.1p 1p 20p)
 .tran 0.01p 15p
 .end`
-	},
-	{
-		name: 'Fast Transmission Line',
-		category: 'Transmission Lines',
-		description: 'Transmission line with matched impedances',
-		value: 'fast-transmission-line',
-		code: `FAST TRANSMISSION LINE
+		},
+		{
+			name: 'Fast Transmission Line',
+			category: 'Transmission Lines',
+			description: 'Transmission line with matched impedances',
+			value: 'fast-transmission-line',
+			code: `FAST TRANSMISSION LINE
 t1 in 0 out 0 z0=50 td=1p
 r1 in 0 50
 r2 out 0 50
 vin in 0 pulse(0 1 0 0.1p 0.1p 2p 4p)
 .tran 0.01p 12p
 .end`
-	},
-	{
-		name: 'Fast Crystal Model',
-		category: 'Resonators',
-		description: 'Crystal oscillator equivalent circuit model',
-		value: 'fast-crystal-model',
-		code: `FAST CRYSTAL MODEL
+		},
+		{
+			name: 'Fast Crystal Model',
+			category: 'Resonators',
+			description: 'Crystal oscillator equivalent circuit model',
+			value: 'fast-crystal-model',
+			code: `FAST CRYSTAL MODEL
 l1 in n1 1u
 c1 n1 n2 1f
 r1 n2 out 1
 c2 in out 10f
-vin in 0 sin(0 0.1 1g 0 0) ; Added phase and phi for clarity, default is 0
+vin in 0 sin(0 0.1 1g 0 0)
 .tran 0.01p 10p
 .end`
-	},
-	{
-		name: 'Fast CMOS Ring Oscillator',
-		category: 'Oscillators',
-		description: 'Three-stage CMOS ring oscillator',
-		value: 'fast-cmos-ring',
-		code: `FAST CMOS RING OSC
+		},
+		{
+			name: 'Fast CMOS Ring Oscillator',
+			category: 'Oscillators',
+			description: 'Three-stage CMOS ring oscillator',
+			value: 'fast-cmos-ring',
+			code: `FAST CMOS RING OSC
 .include modelcard.CMOS90
 m1 vdd a b b P90 W=2u L=0.09u
 m2 b a 0 0 N90 W=1u L=0.09u
@@ -227,69 +217,63 @@ m4 c b 0 0 N90 W=1u L=0.09u
 m5 vdd c a a P90 W=2u L=0.09u
 m6 a c 0 0 N90 W=1u L=0.09u
 vdd vdd 0 1.8
-.tran 0.01p 5p uic ; Added uic for potentially better oscillator startup
+.tran 0.01p 5p uic
 .end`
-	},
-	{
-		name: 'Fast Current Mirror',
-		category: 'Analog Circuits',
-		description: 'CMOS current mirror with load resistor',
-		value: 'fast-current-mirror',
-		code: `FAST CURRENT MIRROR
+		},
+		{
+			name: 'Fast Current Mirror',
+			category: 'Analog Circuits',
+			description: 'CMOS current mirror with load resistor',
+			value: 'fast-current-mirror',
+			code: `FAST CURRENT MIRROR
 .include modelcard.CMOS90
 m1 vdd gate gate gate P90 W=10u L=0.09u
 m2 vdd gate out out P90 W=10u L=0.09u
-i1 gate 0 0 pulse(0 100u 0 0.1p 0.1p 1p 2p) ; Changed DC value from 100u to 0
+i1 gate 0 0 pulse(0 100u 0 0.1p 0.1p 1p 2p)
 r1 out 0 1k
 vdd vdd 0 1.8
 .tran 0.01p 6p
 .end`
-	},
-	{
-		name: 'Chaos RLC Circuit (Chua\'s Circuit)',
-		category: 'Nonlinear Circuits',
-		description: 'Chua\'s circuit exhibiting chaotic behavior',
-		value: 'chaos-rlc-circuit',
-		code: `CHAOS RLC CIRCUIT (Chua's Circuit)
+		},
+		{
+			name: 'Chaos RLC Circuit (Chua\'s Circuit)',
+			category: 'Nonlinear Circuits',
+			description: 'Chua\'s circuit exhibiting chaotic behavior',
+			value: 'chaos-rlc-circuit',
+			code: `CHAOS RLC CIRCUIT (Chua's Circuit)
 .include modelcard.CMOS90
 r1 vin n1 220.0
-l1 n1 n2 18.0 ; Assuming Henrys
-c1 n2 0 0.1  ; Assuming Farads
-c2 vin n2 0.01 ; Assuming Farads
-
-; Nonlinear resistor using MOSFETs
+l1 n1 n2 18.0
+c1 n2 0 0.1
+c2 vin n2 0.01
 m1 n2 n2 n3 n3 N90 W=200.0u L=0.09u
 m2 n3 n2 0 0 N90 W=100.0u L=0.09u
 r2 n3 0 500.0
 vin vin 0 pulse(0 2.5 0 0.1 0.1 12 25)
 vdd vdd 0 1.8
-.tran 0.05 45 uic ; Added uic as it's often helpful for complex circuits
+.tran 0.05 45 uic
 .end`
-	},
-	{
-		name: 'Parametric Oscillator (Varactor Tuned)',
-		category: 'Advanced Circuits',
-		description: 'Voltage-controlled oscillator using varactor',
-		value: 'parametric-oscillator',
-		code: `PARAMETRIC OSCILLATOR (Varactor Tuned)
+		},
+		{
+			name: 'Parametric Oscillator (Varactor Tuned)',
+			category: 'Advanced Circuits',
+			description: 'Voltage-controlled oscillator using varactor',
+			value: 'parametric-oscillator',
+			code: `PARAMETRIC OSCILLATOR (Varactor Tuned)
 .include modelcard.CMOS90
-l1 osc n1 8.5n ; Assuming nH for a "fast" context with CMOS
+l1 osc n1 8.5n
 m1 n1 vtune n2 0 N90 W=50.0u L=0.09u
-c1 n2 0 0.05p ; Assuming pF for a "fast" context with CMOS
+c1 n2 0 0.05p
 r1 osc 0 180.0
-
-; Pump frequency
-vpump vtune 0 sin(0 0.8 2meg 0 0) ; Added phase and phi for clarity
-
-; Main oscillation
+vpump vtune 0 sin(0 0.8 2meg 0 0)
 m2 vdd gate osc osc P90 W=180.0u L=0.09u
 m3 osc gate 0 0 N90 W=90.0u L=0.09u
 r2 vdd gate 1.2k
 vdd vdd 0 1.8
-.tran 0.02n 40n uic ; Adjusted tran times to be more consistent with "fast" and assumed nH/pF. Original times were very long.
+.tran 0.02n 40n uic
 .end`
-	}
-];
+		}
+	];
 
 	// Initialize variables from server data or defaults
 	let netlistCode = data.netlist || `Basic RLC circuit
@@ -317,19 +301,148 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	let plotType: 'webgl' | 'd3' = data.plotType || 'd3';
 	
 	// UI state from server data
-	let showGrid = data.showGrid;
-	let showCrosshair = data.showCrosshair;
-	let measurementMode = data.measurementMode;
-	let lockedSignal = data.lockedSignal;
-	let autoRun = data.autoRun;
-	let readOnly = data.readOnly;
+	let showGrid = data.showGrid ?? true;
+	let showCrosshair = data.showCrosshair ?? true;
+	let measurementMode = data.measurementMode ?? false;
+	let lockedSignal = data.lockedSignal ?? null;
+	let autoRun = data.autoRun ?? false;
+	let readOnly = data.readOnly ?? false;
+
+	// UI state
+	let selectedExample = '';
+	let exampleSelectorOpen = false;
+	let isFullscreen = false;
+
+	// Resizable layout state
+	let editorWidth = 25; // percentage
+	let sidebarWidth = 20; // percentage
+	let isDragging = false;
+	let dragStartX = 0;
+	let dragStartWidths = { editor: 0, sidebar: 0 };
+
+	// Tab state for right sidebar
+	let activeSidebarTab = 'signals';
+	
+	// Force D3.js only
+	$: plotType = 'd3';
+
+	// Signal control helper functions
+	let availableSignals: string[] = [];
+	
+	// Extract available signals from result array
+	$: {
+		if (resultArray && resultArray.results && resultArray.results.length > 0) {
+			const firstResult = resultArray.results[0];
+			if (firstResult && firstResult.variableNames) {
+				availableSignals = firstResult.variableNames.filter(name => name !== 'x');
+			}
+		}
+	}
+
+	function toggleSignalVisibility(signalName: string) {
+		const existingIndex = displayData.findIndex(item => item.name === signalName);
+		
+		if (existingIndex >= 0) {
+			// Remove signal from display
+			displayData = displayData.filter(item => item.name !== signalName);
+		} else {
+			// Add signal to display with auto-assigned color
+			const newDisplayItem: DisplayDataType = {
+				name: signalName,
+				visible: true,
+				color: getNextColor(),
+				index: displayData.length,
+				measureWithCursor: false
+			};
+			displayData = [...displayData, newDisplayItem];
+		}
+		
+		onDisplayDataChange(displayData);
+	}
+
+	function toggleCursorMeasurement(signalName: string) {
+		displayData = displayData.map(item => 
+			item.name === signalName 
+				? { ...item, measureWithCursor: !item.measureWithCursor }
+				: item
+		);
+		onDisplayDataChange(displayData);
+	}
+
+	function getNextColor() {
+		const colorPalette = [
+			{ r: 0.31, g: 0.78, b: 0.47, a: 1.0 }, // Green
+			{ r: 0.20, g: 0.60, b: 0.86, a: 1.0 }, // Blue  
+			{ r: 0.95, g: 0.39, b: 0.27, a: 1.0 }, // Red
+			{ r: 0.94, g: 0.77, b: 0.06, a: 1.0 }, // Yellow
+			{ r: 0.61, g: 0.35, b: 0.71, a: 1.0 }, // Purple
+			{ r: 0.90, g: 0.49, b: 0.13, a: 1.0 }, // Orange
+			{ r: 0.33, g: 0.68, b: 0.75, a: 1.0 }, // Teal
+			{ r: 0.84, g: 0.15, b: 0.56, a: 1.0 }, // Pink
+		];
+		return colorPalette[displayData.length % colorPalette.length];
+	}
+
+	function isSignalVisible(signalName: string): boolean {
+		return displayData.some(item => item.name === signalName && item.visible);
+	}
+
+	function isSignalMeasured(signalName: string): boolean {
+		return displayData.some(item => item.name === signalName && item.measureWithCursor);
+	}
+
+	function getSignalDisplayData(signalName: string): DisplayDataType | undefined {
+		return displayData.find(item => item.name === signalName);
+	}
+
+	function colorToHex(color: any): string {
+		const r = Math.round(color.r * 255);
+		const g = Math.round(color.g * 255);
+		const b = Math.round(color.b * 255);
+		return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+	}
+
+	function toggleAllSignals() {
+		if (displayData.length === availableSignals.length) {
+			// Hide all
+			displayData = [];
+		} else {
+			// Show all
+			displayData = availableSignals.map((signal, index) => ({
+				name: signal,
+				visible: true,
+				color: getNextColor(),
+				index,
+				measureWithCursor: false
+			}));
+		}
+		onDisplayDataChange(displayData);
+	}
+
+	function toggleAllMeasurements() {
+		const visibleSignals = displayData.filter(item => item.visible);
+		const allMeasured = visibleSignals.every(item => item.measureWithCursor);
+		
+		displayData = displayData.map(item => 
+			item.visible 
+				? { ...item, measureWithCursor: !allMeasured }
+				: item
+		);
+		onDisplayDataChange(displayData);
+	}
+
+	$: visibleSignals = displayData.filter(item => item.visible);
+	$: measuredSignals = displayData.filter(item => item.measureWithCursor);
 
 	onMount(async () => {
+		console.log('SPICE page mounted, browser:', browser);
 		if (browser) {
+			console.log('Creating SimArray...');
 			simArray = new SimArray();
 			
 			// Initialize simulation workers
 			try {
+				console.log('Initializing SimArray with threads:', threads);
 				await simArray.init(threads);
 				isInitialized = true;
 				console.log('SimArray initialized successfully');
@@ -350,13 +463,39 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 			
 			// Theme detection (only if not set by URL)
 			if (!data.theme) {
-				const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-				theme = mediaQuery.matches ? 'dark' : 'light';
+				// Check current theme from document class
+				const isDark = document.documentElement.classList.contains('dark');
+				theme = isDark ? 'dark' : 'light';
 				
+				// Also listen for system theme changes
+				const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 				mediaQuery.addEventListener('change', (e) => {
-					theme = e.matches ? 'dark' : 'light';
+					const newTheme = e.matches ? 'dark' : 'light';
+					if (newTheme !== theme) {
+						console.log('System theme changed from', theme, 'to', newTheme);
+						theme = newTheme;
+					}
 				});
 			}
+
+			// Listen for manual theme changes from mode-watcher
+			const observer = new MutationObserver((mutations) => {
+				mutations.forEach((mutation) => {
+					if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+						const target = mutation.target as HTMLElement;
+						const newTheme = target.classList.contains('dark') ? 'dark' : 'light';
+						if (newTheme !== theme) {
+							console.log('Theme changed from', theme, 'to', newTheme);
+							theme = newTheme;
+						}
+					}
+				});
+			});
+
+			observer.observe(document.documentElement, {
+				attributes: true,
+				attributeFilter: ['class']
+			});
 			
 			// Auto-run simulation if requested
 			if (autoRun && isInitialized && netlistCode.trim()) {
@@ -366,7 +505,11 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	});
 
 	async function runSimulation() {
-		if (!simArray || !isInitialized || isRunning) return;
+		console.log('runSimulation called', { simArray: !!simArray, isInitialized, isRunning });
+		if (!simArray || !isInitialized || isRunning) {
+			console.log('Simulation blocked:', { simArray: !!simArray, isInitialized, isRunning });
+			return;
+		}
 		
 		isRunning = true;
 		errorMessage = '';
@@ -448,10 +591,6 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		}
 	}
 
-	// Example selector state
-	let selectedExample = '';
-	let exampleSelectorOpen = false;
-
 	function onCodeChange(code: string) {
 		netlistCode = code;
 	}
@@ -460,12 +599,7 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		displayData = newDisplayData;
 	}
 
-	function toggleExampleSelector(event) {
-		event.stopPropagation();
-		exampleSelectorOpen = !exampleSelectorOpen;
-	}
-
-	function selectExample(example) {
+	function selectExample(example: any) {
 		selectedExample = example.name;
 		netlistCode = example.code;
 		exampleSelectorOpen = false;
@@ -475,11 +609,50 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		errorMessage = '';
 	}
 
-	function handleClickOutside(event) {
-		// Only close if clicking outside the selector
-		if (!event.target.closest('.example-selector')) {
-			exampleSelectorOpen = false;
-		}
+	function toggleFullscreen() {
+		isFullscreen = !isFullscreen;
+	}
+
+	function resetZoom() {
+		// This will be handled by the plot components
+	}
+
+	// Resizable layout functions
+	function startDrag(event: MouseEvent) {
+		isDragging = true;
+		dragStartX = event.clientX;
+		dragStartWidths = { editor: editorWidth, sidebar: sidebarWidth };
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+	}
+
+	function handleDrag(event: MouseEvent) {
+		if (!isDragging) return;
+		
+		const deltaX = event.clientX - dragStartX;
+		const containerWidth = window.innerWidth;
+		const deltaPercent = (deltaX / containerWidth) * 100;
+		
+		// Adjust widths while maintaining total of 100%
+		const newEditorWidth = Math.max(20, Math.min(40, dragStartWidths.editor + deltaPercent));
+		const newSidebarWidth = Math.max(15, Math.min(30, dragStartWidths.sidebar - deltaPercent));
+		
+		// Normalize to ensure total is 100%
+		const total = newEditorWidth + newSidebarWidth;
+		editorWidth = (newEditorWidth / total) * 100;
+		sidebarWidth = (newSidebarWidth / total) * 100;
+	}
+
+	function stopDrag() {
+		isDragging = false;
+		document.body.style.cursor = '';
+		document.body.style.userSelect = '';
+	}
+
+	// Handle mouse events for resizing
+	$: if (browser) {
+		window.addEventListener('mousemove', handleDrag);
+		window.addEventListener('mouseup', stopDrag);
 	}
 </script>
 
@@ -488,679 +661,393 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 	<meta name="description" content="Browser-based SPICE circuit simulator using WebAssembly" />
 </svelte:head>
 
-<div class="spice-simulator px-4" data-theme={theme}>
-	<div class="simulator-header">
-		<div class="header-content">
-			<h1>SPICE Circuit Simulator</h1>
-			
-		</div>
-		
-		<div class="controls">
-			<div class="thread-control">
-				<label for="threads">Threads:</label>
-				<input
-					id="threads"
-					type="number"
-					bind:value={threads}
-					min="1"
-					max={navigator?.hardwareConcurrency || 8}
-					disabled={isRunning}
-				/>
-			</div>
-			
-			<button 
-				class="run-btn"
-				class:running={isRunning}
-				class:disabled={!isInitialized || readOnly}
-				on:click={runSimulation}
-				disabled={isRunning || !isInitialized || readOnly}
-			>
-				{#if isRunning}
-					<div class="spinner"></div>
-					Running...
-				{:else if !isInitialized}
-					⚠ Initializing...
-				{:else}
-					▶ Run Simulation
-				{/if}
-			</button>
-		</div>
-	</div>
-
-	{#if errorMessage}
-		<div class="error-banner">
-			<strong>Simulation Error:</strong> {errorMessage}
-		</div>
-	{/if}
-
-	<div class="simulator-content">
-		<div class="editor-section">
-			<div class="section-header">
-				<h2>Circuit Editor</h2>
-			</div>
-			
-			<div class="editor-container">
-				<div class="example-selector-container">
-					<!-- Inline Example Selector -->
-					<div class="example-selector py-2">
-
-						<button 
-							class="example-trigger" 
-							on:click={toggleExampleSelector}
-						>
-							{selectedExample || 'Select example...'}
-							<span class="chevron" class:rotated={exampleSelectorOpen}>↓</span>
-						</button>
-						
-						{#if exampleSelectorOpen}
-							<div class="example-dropdown">
-								{#each examples as example}
-									<button 
-										class="example-item" 
-										on:click={() => selectExample(example)}
-									>
-										<div class="example-name">{example.name}</div>
-										<div class="example-category">{example.category}</div>
-									</button>
-								{/each}
-							</div>
-						{/if}
+<div class="h-screen bg-background flex flex-col overflow-hidden" class:fullscreen={isFullscreen} style="height: calc(100vh - 64px);">
+	<!-- Header -->
+	<header class="border-b bg-card flex-shrink-0">
+		<div class="px-4 py-3">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<CircuitBoard class="h-6 w-6 text-primary icon-fixed" />
+					<div>
+						<h1 class="text-lg font-bold text-foreground">SPICE Circuit Simulator</h1>
+						<p class="text-xs text-muted-foreground">Browser-based circuit simulation</p>
 					</div>
 				</div>
 				
-				<div class="netlist-editor-container">
-					{#if readOnly}
-						<div class="readonly-notice">
-							<p>Read-only mode - Circuit loaded from URL parameters</p>
+				<div class="flex items-center gap-2">
+					<!-- Thread Control -->
+					<div class="flex items-center gap-2">
+						<Label for="threads" class="text-xs font-medium">Threads:</Label>
+						<Input
+							id="threads"
+							type="number"
+							bind:value={threads}
+							min="1"
+							max={navigator?.hardwareConcurrency || 8}
+							disabled={isRunning}
+							class="w-12 h-7 text-xs"
+						/>
+					</div>
+					
+					<!-- Run Button -->
+					<button 
+						on:click={runSimulation}
+						disabled={isRunning || !isInitialized || readOnly}
+						class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{#if isRunning}
+							<Square class="h-3 w-3 icon-fixed-sm" />
+							Running...
+						{:else if !isInitialized}
+							<Settings class="h-3 w-3 icon-fixed-sm" />
+							Init...
+						{:else}
+							<Play class="h-3 w-3 icon-fixed-sm" />
+							Run
+						{/if}
+					</button>
+					
+					<!-- Debug Info -->
+					<div class="text-xs text-muted-foreground">
+						{isInitialized ? '✓' : '✗'} {isRunning ? '▶' : '⏸'}
+					</div>
+					
+					<!-- Fullscreen Toggle -->
+					<button 
+						on:click={toggleFullscreen}
+						class="inline-flex items-center gap-1 px-3 py-1.5 border border-input bg-background text-foreground rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+					>
+						{#if isFullscreen}
+							<Minimize2 class="h-3 w-3 icon-fixed-sm" />
+						{:else}
+							<Maximize2 class="h-3 w-3 icon-fixed-sm" />
+						{/if}
+					</button>
+				</div>
+			</div>
+		</div>
+	</header>
+
+	<!-- Error Banner -->
+	{#if errorMessage}
+		<div class="px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-destructive text-sm">
+			<div class="flex items-center gap-2">
+				<XCircle class="h-4 w-4" />
+				<strong>Simulation Error:</strong> {errorMessage}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Main Content - Resizable Layout -->
+	<main class="flex-1 flex overflow-hidden">
+		<!-- Editor Panel -->
+		<div class="flex flex-col border-r border-border overflow-hidden" style="width: {editorWidth}%; min-width: 250px; max-width: 400px;">
+			<div class="border-b border-border bg-muted/30 px-3 py-2 flex-shrink-0">
+				<h2 class="text-sm font-semibold flex items-center gap-2">
+					<FileText class="h-4 w-4 icon-fixed" />
+					Circuit Editor
+				</h2>
+			</div>
+			<div class="flex-1 overflow-auto p-3 space-y-3">
+				<!-- Example Selector -->
+				<div class="space-y-2">
+					<Label class="text-xs font-medium">Example Circuit</Label>
+					<div class="relative">
+						<select 
+							bind:value={selectedExample}
+							on:change={(e) => {
+								const target = e.target as HTMLSelectElement;
+								const example = examples.find(ex => ex.value === target.value);
+								if (example) selectExample(example);
+							}}
+							class="w-full h-8 rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							<option value="">Select an example...</option>
+							{#each examples as example}
+								<option value={example.value}>{example.name} - {example.category}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<!-- Read-only Notice -->
+				{#if readOnly}
+					<div class="p-2 bg-muted/50 border border-border rounded text-xs">
+						<div class="flex items-center gap-1">
+							<FileText class="h-3 w-3" />
+							<span>Read-only mode</span>
 						</div>
-					{/if}
-					<SpiceEditor 
-						value={netlistCode}
-						{theme}
-						on:change={(e) => !readOnly && onCodeChange(e.detail)}
-					/>
+					</div>
+				{/if}
+
+				<!-- Editor -->
+				<div class="space-y-1">
+					<Label class="text-xs font-medium">Netlist Code</Label>
+					<div class="border border-border rounded-md overflow-hidden">
+						<SpiceEditor 
+							value={netlistCode}
+							{theme}
+							on:change={(e) => !readOnly && onCodeChange(e.detail)}
+						/>
+					</div>
 				</div>
 			</div>
 		</div>
 
-		<div class="results-section">
-			<div class="section-header">
-				<h2>Simulation Results</h2>
-				<div class="header-controls">
-					{#if resultArray}
-						<div class="plot-type-selector">
-							<label>
-								<input 
-									type="radio" 
-									bind:group={plotType} 
-									value="d3" 
-								/>
-								D3.js
-							</label>
-							<label>
-								<input 
-									type="radio" 
-									bind:group={plotType} 
-									value="webgl" 
-								/>
-								WebGL
-							</label>
-						</div>
-						<DownloadCSV {resultArray} />
-					{/if}
-				</div>
-			</div>
-			
-			{#if resultArray}
-				<div class="results-content">
-					<div class="plot-area">
-						{#if plotType === 'd3'}
+		<!-- Resize Handle -->
+		<div 
+			class="w-1 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center"
+			on:mousedown={startDrag}
+		>
+			<GripVertical class="h-4 w-4 text-muted-foreground" />
+		</div>
+
+		<!-- Results Panel -->
+		<div class="flex flex-col border-r border-border flex-1 min-w-0 overflow-hidden">
+			<div class="flex-1 overflow-auto p-3">
+				{#if resultArray}
+					<div class="space-y-3">
+						<!-- Plot Area -->
+						<div class="border border-border rounded-md overflow-hidden flex-1 min-h-0">
 							<D3PlotCanvas 
 								{resultArray}
 								{displayData}
 								{theme}
 							/>
-						{:else}
-							<PlotCanvas 
-								{resultArray}
-								{displayData}
-								{theme}
-							/>
-						{/if}
-					</div>
-
-					<!-- Circuit Editor Simulation Results -->
-					<div class="circuit-simulations">
-						<div class="section-header">
-							<h3>Circuit Editor Simulations</h3>
 						</div>
-						
-						{#if $simulationStore.runs.length > 0}
-							<div class="simulation-runs">
-								{#each $simulationStore.runs as run}
-									<Card class="simulation-run-card">
-										<CardHeader class="p-4">
-											<div class="flex items-center justify-between">
-												<div class="flex items-center gap-2">
-													{#if run.type === 'dc'}
-														<TrendingUp class="w-4 h-4 text-blue-500" />
-													{:else if run.type === 'ac'}
-														<Zap class="w-4 h-4 text-green-500" />
-													{:else if run.type === 'transient'}
-														<Clock class="w-4 h-4 text-purple-500" />
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full text-center">
+						<CircuitBoard class="h-12 w-12 text-muted-foreground mb-2" />
+						<h3 class="text-sm font-semibold mb-1">No Results Yet</h3>
+						<p class="text-xs text-muted-foreground">
+							Run a simulation to see results here
+						</p>
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- Resize Handle -->
+		<div 
+			class="w-1 bg-border hover:bg-primary/50 cursor-col-resize flex items-center justify-center"
+			on:mousedown={startDrag}
+		>
+			<GripVertical class="h-4 w-4 text-muted-foreground" />
+		</div>
+
+		<!-- Right Sidebar with Tabs -->
+		<div class="flex flex-col overflow-hidden" style="width: {sidebarWidth}%; min-width: 200px; max-width: 300px;">
+			<div class="border-b border-border bg-muted/30 px-3 py-2 flex-shrink-0">
+				<h2 class="text-sm font-semibold flex items-center gap-2">
+					<Eye class="h-4 w-4 icon-fixed" />
+					Signal Controls
+				</h2>
+			</div>
+			<div class="flex-1 overflow-auto p-3">
+						{#if resultArray}
+							<div class="space-y-3 h-full flex flex-col">
+								<!-- Signal Controls with shadcn components -->
+								<div class="flex-1 space-y-3">
+									<!-- Visibility Tab -->
+									<div class="space-y-2">
+										<div class="flex items-center justify-between">
+											<h4 class="text-sm font-medium">Signal Visibility</h4>
+											<button 
+												on:click={toggleAllSignals}
+												class="inline-flex items-center px-2 py-1 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+											>
+												{displayData.length === availableSignals.length ? 'Hide All' : 'Show All'}
+											</button>
+										</div>
+										
+										<div class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+											{#each availableSignals as signal}
+												{@const signalData = getSignalDisplayData(signal)}
+												{@const isVisible = isSignalVisible(signal)}
+												
+												<div class="flex items-center space-x-2 p-2 rounded-md border border-border hover:bg-accent/50">
+													<input
+														type="checkbox"
+														id={`signal-${signal}`}
+														checked={isVisible}
+														on:change={() => toggleSignalVisibility(signal)}
+														class="rounded border-border"
+													/>
+													<Label for={`signal-${signal}`} class="flex-1 text-sm cursor-pointer">
+														{signal}
+													</Label>
+													{#if isVisible && signalData}
+														<div 
+															class="w-3 h-3 rounded-full border border-border"
+															style="background-color: {colorToHex(signalData.color)}"
+														></div>
 													{/if}
-													<div>
-														<h4 class="text-sm font-semibold">{run.name}</h4>
-														<p class="text-xs text-muted-foreground">
-															{run.type.toUpperCase()} Analysis • {run.timestamp.toLocaleString()}
-														</p>
-													</div>
 												</div>
-												<div class="flex items-center gap-2">
-													<Badge variant={run.result.success ? "default" : "destructive"} class="text-xs">
-														{#if run.result.success}
-															<CheckCircle class="w-3 h-3 mr-1" />
-															Success
-														{:else}
-															<XCircle class="w-3 h-3 mr-1" />
-															Failed
-														{/if}
-													</Badge>
-													<Button 
-														size="sm" 
-														variant="outline" 
-														onclick={() => copyNetlist(run.netlist)}
-														class="h-6 px-2 text-xs"
-													>
-														<Copy class="w-3 h-3 mr-1" />
-														Copy
-													</Button>
-													<Button 
-														size="sm" 
-														variant="outline" 
-														onclick={() => downloadNetlist(run.netlist, run.name)}
-														class="h-6 px-2 text-xs"
-													>
-														<Download class="w-3 h-3 mr-1" />
-														Save
-													</Button>
-													<Button 
-														size="sm" 
-														variant="outline" 
-														onclick={() => simulationStore.removeRun(run.id)}
-														class="h-6 px-2 text-xs text-destructive"
-													>
-														<Trash2 class="w-3 h-3" />
-													</Button>
-												</div>
+											{/each}
+										</div>
+										
+										{#if displayData.length > 0}
+											<div class="text-xs text-muted-foreground pt-2 border-t border-border">
+												{displayData.length} of {availableSignals.length} signals visible
 											</div>
-										</CardHeader>
-										<CardContent class="p-4 pt-0">
-											{#if run.result.success}
-												<div class="text-xs text-muted-foreground space-y-1">
-													<div><strong>Type:</strong> {run.result.data?.type}</div>
-													<div><strong>Data Points:</strong> {Object.keys(run.result.data?.results || {}).length}</div>
-													<div><strong>Temperature:</strong> {run.config.temperature}°C</div>
-													{#if run.config.voltage}
-														<div><strong>Voltage:</strong> {run.config.voltage}V</div>
-													{/if}
-													{#if run.config.frequency}
-														<div><strong>Frequency:</strong> {run.config.frequency}Hz</div>
-													{/if}
-													{#if run.config.startTime !== undefined}
-														<div><strong>Time Range:</strong> {run.config.startTime}s - {run.config.endTime}s</div>
-													{/if}
-												</div>
-											{:else}
-												<div class="text-xs text-destructive">
-													<strong>Error:</strong> {run.result.error}
-												</div>
-											{/if}
-										</CardContent>
-									</Card>
-								{/each}
+										{/if}
+									</div>
+									
+									<!-- Cursor Measurement Tab -->
+									{#if visibleSignals.length > 0}
+										<div class="space-y-2 pt-3 border-t border-border">
+											<div class="flex items-center justify-between">
+												<h4 class="text-sm font-medium">Cursor Measurement</h4>
+												<button 
+													on:click={toggleAllMeasurements}
+													disabled={visibleSignals.length === 0}
+													class="inline-flex items-center px-2 py-1 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+												>
+													{measuredSignals.length === visibleSignals.length ? 'None' : 'All'}
+												</button>
+											</div>
+											
+											<div class="text-xs text-muted-foreground">
+												Select which signals to measure when using cursor on the plot
+											</div>
+											
+											<div class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+												{#each visibleSignals as signalData}
+													{@const isMeasured = isSignalMeasured(signalData.name)}
+													
+													<div class="flex items-center space-x-2 p-2 rounded-md border border-border hover:bg-accent/50">
+														<input
+															type="checkbox"
+															id={`measure-${signalData.name}`}
+															checked={isMeasured}
+															on:change={() => toggleCursorMeasurement(signalData.name)}
+															class="rounded border-border"
+														/>
+														<Label for={`measure-${signalData.name}`} class="flex-1 text-sm cursor-pointer">
+															{signalData.name}
+														</Label>
+														<div 
+															class="w-3 h-3 rounded-full border border-border"
+															style="background-color: {colorToHex(signalData.color)}"
+														></div>
+														{#if isMeasured}
+															<Badge variant="secondary" class="text-xs px-1 py-0">
+																<Ruler class="h-3 w-3" />
+															</Badge>
+														{/if}
+													</div>
+												{/each}
+											</div>
+											
+											<div class="text-xs text-muted-foreground pt-2 border-t border-border">
+												{measuredSignals.length} of {visibleSignals.length} signals selected for measurement
+											</div>
+										</div>
+									{/if}
+								</div>
+								
+								<!-- Download Button at Bottom -->
+								<div class="pt-3 border-t border-border">
+									<DownloadCSV {resultArray} />
+								</div>
 							</div>
 						{:else}
-							<div class="empty-state">
-								<CircuitBoard class="w-8 h-8 text-muted-foreground" />
-								<p class="text-sm text-muted-foreground">No simulation runs yet</p>
-								<p class="text-xs text-muted-foreground">Run simulations from the Circuit Editor to see results here</p>
+							<div class="flex flex-col items-center justify-center h-full text-center">
+								<Eye class="h-8 w-8 text-muted-foreground mb-2" />
+								<h3 class="text-sm font-semibold mb-1">No Signals</h3>
+								<p class="text-xs text-muted-foreground">
+									Run a simulation to see signal controls
+								</p>
 							</div>
 						{/if}
-					</div>
-					
-					<div class="control-panel">
-						<DisplayBox 
-							{resultArray}
-							bind:displayData
-							{theme}
-							on:updateDisplay={(e) => onDisplayDataChange(e.detail)}
-						/>
-					</div>
-				</div>
-			{:else}
-				<div class="no-results">
-					<p>Run a simulation to see results here</p>
-				</div>
-			{/if}
+			</div>
 		</div>
-	</div>
+	</main>
 </div>
 
-<!-- Click outside handler -->
-<svelte:window on:click={handleClickOutside} />
-
 <style>
-	.spice-simulator {
-		min-height: 100vh;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		font-family: system-ui, -apple-system, sans-serif;
-	}
-
-	.spice-simulator[data-theme="dark"] {
-		--bg-primary: #1a1a1a;
-		--bg-secondary: #2d2d2d;
-		--bg-tertiary: #3d3d3d;
-		--text-primary: #e5e5e5;
-		--text-secondary: #b5b5b5;
-		--border-color: #404040;
-		--accent-color: #4f9eff;
-		--error-bg: #4a1e1e;
-		--error-border: #8b2635;
-		--success-bg: #1e4a2e;
-		--success-border: #26a641;
-	}
-
-	.spice-simulator[data-theme="light"] {
-		--bg-primary: #ffffff;
-		--bg-secondary: #f6f8fa;
-		--bg-tertiary: #e5e7ea;
-		--text-primary: #24292f;
-		--text-secondary: #656d76;
-		--border-color: #d0d7de;
-		--accent-color: #0969da;
-		--error-bg: #ffebee;
-		--error-border: #d32f2f;
-		--success-bg: #e8f5e8;
-		--success-border: #2e7d32;
-	}
-
-	.simulator-header {
-		padding: 2rem;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-color);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 1rem;
-	}
-
-	.header-content h1 {
-		margin: 0;
-		font-size: 2rem;
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
-	.header-content p {
-		margin: 0.5rem 0 0 0;
-		color: var(--text-secondary);
-	}
-
-	.controls {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.thread-control {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--text-secondary);
-	}
-
-	.thread-control input {
-		width: 60px;
-		padding: 0.25rem;
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-	}
-
-	.run-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.5rem;
-		background: var(--accent-color);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.run-btn:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--accent-color) 80%, black);
-	}
-
-	.run-btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.spinner {
-		width: 14px;
-		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top: 2px solid white;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		0% { transform: rotate(0deg); }
-		100% { transform: rotate(360deg); }
-	}
-
-	.error-banner {
-		padding: 1rem 2rem;
-		background: var(--error-bg);
-		border-bottom: 1px solid var(--error-border);
-		color: var(--error-border);
-	}
-
-	.simulator-content {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		min-height: calc(100vh - 120px);
-	}
-
-	.editor-section,
-	.results-section {
-		display: flex;
-		flex-direction: column;
-		border-right: 1px solid var(--border-color);
-	}
-
-	.results-section {
-		border-right: none;
-	}
-
-	.section-header {
-		padding: 1rem 2rem;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-color);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.section-header h2 {
-		margin: 0;
-		font-size: 1.2rem;
-		font-weight: 500;
-		color: var(--text-primary);
-	}
-
-	.header-controls {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.plot-type-selector {
-		display: flex;
-		gap: 1rem;
-		padding: 0.5rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-color);
-		border-radius: 6px;
-	}
-
-	.plot-type-selector label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		cursor: pointer;
-		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
-		transition: background-color 0.2s;
-		font-size: 0.875rem;
-		color: var(--text-primary);
-	}
-
-	.plot-type-selector label:hover {
-		background: var(--bg-secondary);
-	}
-
-	.plot-type-selector input[type="radio"] {
-		margin: 0;
-		accent-color: var(--accent-color);
-	}
-
-	.results-content {
-		display: grid;
-		grid-template-columns: 1fr 350px;
-		gap: 1.5rem;
-		flex: 1;
-		min-height: 0; /* Allow grid items to shrink */
-	}
-
-	.plot-area {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-color);
-		border-radius: 12px;
-		padding: 1rem;
-		min-height: 400px;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.control-panel {
-		display: flex;
-		flex-direction: column;
-		min-height: 0; /* Allow flex items to shrink */
-	}
-
-	.no-results {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-secondary);
-		font-style: italic;
-	}
-
-	.example-selector {
-		position: relative;
-	}
-
-	.example-label {
-		display: block;
-		font-size: 0.875rem;
-		font-weight: 500;
-		margin-bottom: 0.5rem;
-		color: var(--text-primary);
-	}
-
-	.example-trigger {
-		width: 100%;
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--border-color);
-		border-radius: 6px;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		text-align: left;
-		cursor: pointer;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		font-size: 0.875rem;
-		transition: all 0.2s;
-	}
-
-	.example-trigger:hover {
-		border-color: var(--accent-color);
-		background: var(--bg-secondary);
-	}
-
-	.chevron {
-		transition: transform 0.2s;
-		color: var(--text-secondary);
-	}
-
-	.chevron.rotated {
-		transform: rotate(180deg);
-	}
-
-	.example-dropdown {
-		position: absolute;
-		top: 100%;
+	.fullscreen {
+		position: fixed;
+		top: 0;
 		left: 0;
-		right: 0;
-		z-index: 1000;
-		margin-top: 0.25rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
-		box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-		max-height: 300px;
-		overflow-y: auto;
+		width: 100vw;
+		height: 100vh;
+		z-index: 9999;
+		overflow: hidden;
+	}
+	
+	.fullscreen main {
+		height: calc(100vh - 60px);
 	}
 
-	.example-item {
-		width: 100%;
-		padding: 0.75rem 1rem;
-		border: none;
-		background: none;
-		text-align: left;
-		cursor: pointer;
-		transition: background-color 0.2s;
-		border-bottom: 1px solid var(--border-color);
+	/* Custom scrollbars */
+	.custom-scrollbar {
+		scrollbar-width: thin;
+		scrollbar-color: hsl(var(--border)) transparent;
 	}
 
-	.example-item:last-child {
-		border-bottom: none;
+	.custom-scrollbar::-webkit-scrollbar {
+		width: 6px;
 	}
 
-	.example-item:hover {
-		background: var(--bg-secondary);
+	.custom-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
 	}
 
-	.example-name {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--text-primary);
-		margin-bottom: 0.25rem;
+	.custom-scrollbar::-webkit-scrollbar-thumb {
+		background-color: hsl(var(--border));
+		border-radius: 3px;
 	}
 
-	.example-category {
-		font-size: 0.75rem;
-		color: var(--text-secondary);
+	.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+		background-color: hsl(var(--muted-foreground));
 	}
 
-	@media (max-width: 1200px) {
-		.results-content {
-			grid-template-columns: 1fr 300px;
+	/* Fixed icon sizes */
+	.icon-fixed {
+		flex-shrink: 0;
+		min-width: 1rem;
+		min-height: 1rem;
+	}
+
+	.icon-fixed-sm {
+		flex-shrink: 0;
+		min-width: 0.75rem;
+		min-height: 0.75rem;
+	}
+
+	/* Fixed layout to prevent scrolling */
+	main {
+		overflow: hidden;
+	}
+	
+	main > div {
+		overflow: hidden;
+	}
+	
+	/* Desktop fixed layout */
+	@media (min-width: 769px) {
+		main > div {
+			overflow: hidden;
 		}
 	}
 
-	@media (max-width: 1024px) {
-		.simulator-content {
-			grid-template-columns: 1fr;
-		}
-		
-		.editor-section {
-			border-right: none;
-			border-bottom: 1px solid var(--border-color);
-		}
-
-		.results-section {
-			grid-template-columns: 1fr;
-			grid-template-rows: 1fr auto;
-		}
-
-		.control-panel {
-			order: 2;
-		}
-
-		.plot-area {
-			order: 1;
-		}
-	}
-
+	/* Mobile responsive adjustments */
 	@media (max-width: 768px) {
-		.simulator-header {
+		main {
 			flex-direction: column;
-			align-items: stretch;
 		}
 		
-		.controls {
-			justify-content: space-between;
+		main > div {
+			width: 100% !important;
+			min-width: unset !important;
+			max-width: unset !important;
 		}
-	}
-
-	/* Circuit Editor Simulation Results */
-	.circuit-simulations {
-		margin-top: 2rem;
-		padding-top: 2rem;
-		border-top: 1px solid var(--border-color);
-	}
-
-	.simulation-runs {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		margin-top: 1rem;
-	}
-
-	.simulation-run-card {
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
-		background: var(--bg-primary);
-		transition: all 0.2s ease;
-	}
-
-	.simulation-run-card:hover {
-		border-color: var(--accent-color);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-	}
-
-	.empty-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		padding: 3rem 2rem;
-		text-align: center;
-		border: 2px dashed var(--border-color);
-		border-radius: 8px;
-		background: var(--bg-secondary);
-	}
-
-	.empty-state > * + * {
-		margin-top: 0.5rem;
-	}
-
-	.readonly-notice {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-color);
-		border-radius: 4px;
-		padding: 0.5rem;
-		margin-bottom: 0.5rem;
-		text-align: center;
-	}
-
-	.readonly-notice p {
-		margin: 0;
-		font-size: 0.875rem;
-		color: var(--text-secondary);
-		font-style: italic;
+		
+		main > div:not(:last-child) {
+			border-right: none;
+			border-bottom: 1px solid var(--border);
+		}
 	}
 </style>

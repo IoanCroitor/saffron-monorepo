@@ -35,6 +35,7 @@
 	let lastMouseEvent: MouseEvent | null = null;
 	let isDragging = false;
 	let dragTarget: { type: 'measurement', measurementIndex: number, pointIndex: number } | null = null;
+	let themeUpdateTimeout: ReturnType<typeof setTimeout>;
 	
 	// Signal data for snapping measurements
 	let signalData: { name: string, data: { x: number, y: number }[], color: string }[] = [];
@@ -58,6 +59,9 @@
 				if (animationFrameId) {
 					cancelAnimationFrame(animationFrameId);
 				}
+				if (themeUpdateTimeout) {
+					clearTimeout(themeUpdateTimeout);
+				}
 			};
 		}
 	});
@@ -72,10 +76,37 @@
 		updatePlot();
 	}
 
+	// Reactive statement to update plot when resultArray changes
+	$: if (svg && resultArray && resultArray.results.length > 0) {
+		updatePlot();
+	}
+
+	// Reactive statement to update plot when displayData changes
+	$: if (svg && displayData && displayData.length > 0) {
+		updatePlot();
+	}
+
 	$: if (svg && showCrosshair !== undefined && isMouseOverPlot) {
 		// Update crosshair visibility
 		svg.select('.crosshair').style('display', showCrosshair ? 'block' : 'none');
 		svg.select('.cursor-info').style('display', showCrosshair ? 'block' : 'none');
+	}
+
+	// Reactive statement to update plot when theme changes
+	$: if (theme && svg) {
+		console.log('D3PlotCanvas: Theme changed to:', theme);
+		// Clear any pending theme update
+		if (themeUpdateTimeout) {
+			clearTimeout(themeUpdateTimeout);
+		}
+		// Debounce theme updates to prevent infinite loops
+		themeUpdateTimeout = setTimeout(() => {
+			updatePlotTheme();
+			// Only update the full plot if there's data
+			if (resultArray && resultArray.results.length > 0) {
+				updatePlot();
+			}
+		}, 50);
 	}
 
 	// Keyboard shortcuts
@@ -909,7 +940,10 @@
 	function findNearestSignalPoint(targetX: number): { signal: string, value: number, x: number } | null {
 		if (!signalData || signalData.length === 0) return null;
 		
-		let nearest: { signal: string, value: number, x: number, distance: number } | null = null;
+		let bestSignal: string | null = null;
+		let bestValue: number | null = null;
+		let bestX: number | null = null;
+		let bestDistance = Infinity;
 		
 		signalData.forEach(signal => {
 			// Only consider signals that are marked for cursor measurement
@@ -952,23 +986,20 @@
 			}
 			
 			const closestPoint = data[closestIndex];
-			if (!nearest || minDistance < nearest.distance) {
-				nearest = {
-					signal: signal.name,
-					value: closestPoint.y,
-					x: closestPoint.x,
-					distance: minDistance
-				};
+			if (minDistance < bestDistance) {
+				bestDistance = minDistance;
+				bestSignal = signal.name;
+				bestValue = closestPoint.y;
+				bestX = closestPoint.x;
 			}
 		});
 		
-		if (nearest) {
-			const result: { signal: string, value: number, x: number } = {
-				signal: nearest.signal,
-				value: nearest.value,
-				x: nearest.x
+		if (bestSignal && bestValue !== null && bestX !== null) {
+			return {
+				signal: bestSignal,
+				value: bestValue,
+				x: bestX
 			};
-			return result;
 		}
 		return null;
 	}
@@ -1015,6 +1046,55 @@
 		if (plotContainer) {
 			setTimeout(() => handleResize(), 100);
 		}
+	}
+
+	function updatePlotTheme() {
+		if (!svg) return;
+
+		console.log('D3PlotCanvas: Updating theme to:', theme);
+
+		const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+		const gridColor = theme === 'dark' ? '#333' : '#e0e0e0';
+		const bgColor = theme === 'dark' ? '#1a1a1a' : '#ffffff';
+		const crosshairColor = theme === 'dark' ? '#ff6b6b' : '#e74c3c';
+		const cursorBgColor = theme === 'dark' ? '#2d2d2d' : '#f8f9fa';
+		const cursorBorderColor = theme === 'dark' ? '#444' : '#ddd';
+
+		// Update background
+		svg.select('rect').attr('fill', bgColor);
+
+		// Update crosshair colors
+		svg.selectAll('.crosshair-x, .crosshair-y')
+			.attr('stroke', crosshairColor);
+
+		// Update cursor info background and border
+		svg.select('.cursor-info-bg')
+			.attr('fill', cursorBgColor)
+			.attr('stroke', cursorBorderColor);
+
+		// Update cursor text colors
+		svg.selectAll('.cursor-x-text, .cursor-y-text')
+			.attr('fill', textColor);
+
+		// Update grid colors
+		svg.selectAll('.grid-x, .grid-y')
+			.attr('stroke', gridColor);
+
+		// Update axis colors
+		svg.selectAll('.axis text')
+			.attr('fill', textColor);
+
+		svg.selectAll('.axis .domain, .axis .tick line')
+			.attr('stroke', textColor);
+
+		// Update axis labels
+		svg.selectAll('.axis-label')
+			.attr('fill', textColor);
+
+		// Update legend text colors
+		svg.selectAll('.legend')
+			.filter(function() { return (this as Element).tagName === 'text'; })
+			.attr('fill', textColor);
 	}
 </script>
 
@@ -1174,7 +1254,20 @@
 		height: 100vh !important;
 		z-index: 9999;
 		border-radius: 0;
-		border: none;
+		border: 2px solid hsl(var(--border));
+		background: hsl(var(--background));
+	}
+
+	/* Light mode fullscreen borders */
+	:global(.light) .d3-plot-container.fullscreen {
+		border-color: #ffffff;
+		box-shadow: 0 0 0 2px #ffffff;
+	}
+
+	/* Dark mode fullscreen borders */
+	:global(.dark) .d3-plot-container.fullscreen {
+		border-color: hsl(var(--border));
+		box-shadow: 0 0 0 2px hsl(var(--border));
 	}
 
 	.plot-header {
@@ -1183,8 +1276,8 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-color);
+		background: hsl(var(--card));
+		border-bottom: 1px solid hsl(var(--border));
 		border-radius: 4px 4px 0 0;
 		min-height: 60px;
 	}
@@ -1193,7 +1286,7 @@
 		margin: 0;
 		font-size: 0.875rem;
 		font-weight: 600;
-		color: var(--text-primary);
+		color: hsl(var(--card-foreground));
 		justify-self: start;
 	}
 
@@ -1206,27 +1299,36 @@
 
 	.control-btn {
 		padding: 0.5rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-color);
+		background: hsl(var(--background));
+		border: 1px solid hsl(var(--border));
 		border-radius: 4px;
-		color: var(--text-secondary);
+		color: hsl(var(--foreground));
 		cursor: pointer;
 		transition: all 0.2s ease;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		flex-shrink: 0;
 	}
 
 	.control-btn:hover {
-		background: var(--bg-secondary);
-		color: var(--text-primary);
-		border-color: var(--accent-color);
+		background: hsl(var(--accent));
+		color: hsl(var(--accent-foreground));
+		border-color: hsl(var(--ring));
 	}
 
 	.control-btn.active {
-		background: var(--accent-color);
-		color: white;
-		border-color: var(--accent-color);
+		background: hsl(var(--primary));
+		color: hsl(var(--primary-foreground));
+		border-color: hsl(var(--primary));
+	}
+
+	.control-btn svg {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
 	}
 
 	.plot-info {
@@ -1240,7 +1342,7 @@
 
 	.info-text {
 		font-size: 0.75rem;
-		color: var(--text-secondary);
+		color: hsl(var(--muted-foreground));
 		white-space: nowrap;
 	}
 
@@ -1271,12 +1373,12 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.5rem 1rem;
-		background: var(--bg-secondary);
-		border-top: 1px solid var(--border-color);
+		background: hsl(var(--muted));
+		border-top: 1px solid hsl(var(--border));
 		border-radius: 0 0 4px 4px;
 		min-height: 40px;
 		font-size: 0.75rem;
-		color: var(--text-secondary);
+		color: hsl(var(--muted-foreground));
 	}
 
 	.status-left,
@@ -1295,33 +1397,33 @@
 
 	.status-label {
 		font-weight: 600;
-		color: var(--text-primary);
+		color: hsl(var(--foreground));
 	}
 
 	.status-value {
 		font-family: monospace;
-		color: var(--accent-color);
-		background: var(--bg-primary);
+		color: hsl(var(--primary));
+		background: hsl(var(--background));
 		padding: 0.125rem 0.375rem;
 		border-radius: 3px;
-		border: 1px solid var(--border-color);
+		border: 1px solid hsl(var(--border));
 	}
 
 	.status-signal {
 		font-family: monospace;
 		font-weight: 600;
-		color: var(--text-primary);
-		background: var(--bg-tertiary);
+		color: hsl(var(--foreground));
+		background: hsl(var(--accent));
 		padding: 0.125rem 0.375rem;
 		border-radius: 3px;
-		border: 1px solid var(--border-color);
+		border: 1px solid hsl(var(--border));
 	}
 
 	.signal-info {
-		background: var(--bg-primary);
+		background: hsl(var(--background));
 		padding: 0.25rem 0.5rem;
 		border-radius: 4px;
-		border: 1px solid var(--border-color);
+		border: 1px solid hsl(var(--border));
 	}
 
 	.measurement-info {
