@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card } from '$lib/components/ui/card';
 	import ComponentIcon from './ComponentIcon.svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	// Props for state management
 	interface Props {
@@ -17,6 +18,54 @@
 
 	let searchTerm = $state('');
 	let draggedComponent = $state<string | null>(null);
+	
+	// Resizable functionality
+	let sidebarWidth = $state(320); // Default width
+	let isResizing = $state(false);
+	let startX = 0;
+	let startWidth = 0;
+
+	function startResize(event: MouseEvent) {
+		if (typeof document === 'undefined') return;
+		
+		isResizing = true;
+		startX = event.clientX;
+		startWidth = sidebarWidth;
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+		document.body.classList.add('resizing');
+	}
+
+	function handleResize(event: MouseEvent) {
+		if (!isResizing) return;
+		
+		const deltaX = event.clientX - startX;
+		const newWidth = Math.max(250, Math.min(600, startWidth + deltaX));
+		sidebarWidth = newWidth;
+	}
+
+	function stopResize() {
+		if (typeof document === 'undefined') return;
+		
+		isResizing = false;
+		document.body.style.cursor = '';
+		document.body.style.userSelect = '';
+		document.body.classList.remove('resizing');
+	}
+
+	onMount(() => {
+		if (typeof document !== 'undefined') {
+			document.addEventListener('mousemove', handleResize);
+			document.addEventListener('mouseup', stopResize);
+		}
+	});
+
+	onDestroy(() => {
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('mousemove', handleResize);
+			document.removeEventListener('mouseup', stopResize);
+		}
+	});
 
 	const componentCategories = [
 		{
@@ -64,7 +113,7 @@
 	);
 
 	function handleDragStart(event: DragEvent, componentType: string) {
-		if (event.dataTransfer) {
+		if (event.dataTransfer && typeof document !== 'undefined') {
 			event.dataTransfer.setData('application/reactflow', componentType);
 			event.dataTransfer.effectAllowed = 'move';
 			
@@ -91,7 +140,9 @@
 			
 			// Clean up after a short delay
 			setTimeout(() => {
-				document.body.removeChild(dragImage);
+				if (document.body.contains(dragImage)) {
+					document.body.removeChild(dragImage);
+				}
 			}, 0);
 		}
 		draggedComponent = componentType;
@@ -116,7 +167,13 @@
 
 </script>
 
-<div class="w-80 h-full overflow-hidden bg-background border-r border-border flex flex-col">
+<div class="h-full bg-background border-r border-border flex flex-col relative" style="width: {sidebarWidth}px;">
+	<!-- Resize Handle -->
+	<div 
+		class="absolute right-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
+		onmousedown={startResize}
+		title="Drag to resize panel"
+	></div>
 	<!-- Header -->
 	<div class="p-4 border-b border-border">
 		<h2 class="text-lg font-semibold text-foreground mb-3">Components</h2>
@@ -131,7 +188,7 @@
 	</div>
 
 	<!-- Components List -->
-	<div class="flex-1 overflow-y-auto p-4 space-y-6">
+	<div class="flex-1 overflow-y-auto p-4 space-y-6 sidebar-content">
 		{#each filteredCategories as category (category.name)}
 			<div class="space-y-3">
 				<h3 class="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -173,7 +230,7 @@
 	</div>
 
 	<!-- Footer -->
-	<div class="p-4 border-t border-border space-y-2">
+	<div class="p-4 border-t border-border space-y-2 sidebar-content">
 		<Button variant="outline" size="sm" class="w-full" onclick={onClearCircuit}>
 			Clear Circuit
 		</Button>
@@ -187,5 +244,39 @@
 		-webkit-line-clamp: 1;
 		line-clamp: 1;
 		-webkit-box-orient: vertical;
+	}
+	
+	/* Prevent text selection during resize */
+	:global(body.resizing) {
+		user-select: none;
+		cursor: col-resize;
+	}
+	
+	/* Make resize handle more visible */
+	.resize-handle {
+		background: hsl(var(--border));
+		transition: background-color 0.2s ease;
+		border-left: 1px solid hsl(var(--border));
+	}
+	
+	.resize-handle:hover {
+		background: hsl(var(--primary) / 0.5);
+		border-left-color: hsl(var(--primary));
+	}
+	
+	.resize-handle:active {
+		background: hsl(var(--primary));
+		border-left-color: hsl(var(--primary));
+	}
+	
+	/* Prevent horizontal overflow */
+	:global(.overflow-hidden) {
+		overflow: hidden !important;
+	}
+	
+	/* Ensure content doesn't overflow the sidebar */
+	.sidebar-content {
+		max-width: 100%;
+		overflow-x: hidden;
 	}
 </style>

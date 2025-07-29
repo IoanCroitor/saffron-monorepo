@@ -16,6 +16,7 @@
     import type { Node } from '@xyflow/svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import type { Edge } from '@xyflow/svelte';
+    import { onMount, onDestroy } from 'svelte';
 
     interface Props {
         selectedNode: Node | null;
@@ -24,7 +25,7 @@
         onUpdateComponent: (id: string, parameters: any) => void;
         onRemoveComponent: (id: string) => void;
         onAddComponent: (type: string, position: { x: number; y: number }) => void;
-        onExportNetlist: () => string;
+        onExportNetlist: () => Promise<string>;
         onExportJSON: () => string;
     }
 
@@ -46,6 +47,56 @@
     let { selectedNode = $bindable(), nodes = $bindable(), edges, onUpdateComponent, onRemoveComponent, onAddComponent, onExportNetlist, onExportJSON }: Props = $props();
 
     let parameters = $state<Record<string, any>>({});
+    
+    // Resizable functionality
+    let sidebarWidth = $state(320); // Default width
+    let isResizing = $state(false);
+    let startX = 0;
+    let startWidth = 0;
+    
+
+
+    function startResize(event: MouseEvent) {
+        if (typeof document === 'undefined') return;
+        
+        isResizing = true;
+        startX = event.clientX;
+        startWidth = sidebarWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.classList.add('resizing');
+    }
+
+    function handleResize(event: MouseEvent) {
+        if (!isResizing) return;
+        
+        const deltaX = startX - event.clientX;
+        const newWidth = Math.max(250, Math.min(600, startWidth + deltaX));
+        sidebarWidth = newWidth;
+    }
+
+    function stopResize() {
+        if (typeof document === 'undefined') return;
+        
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.classList.remove('resizing');
+    }
+
+    onMount(() => {
+        if (typeof document !== 'undefined') {
+            document.addEventListener('mousemove', handleResize);
+            document.addEventListener('mouseup', stopResize);
+        }
+    });
+
+    onDestroy(() => {
+        if (typeof document !== 'undefined') {
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+        }
+    });
 
     $effect(() => {
         if (selectedNode?.data?.parameters) {
@@ -147,20 +198,7 @@
         }
     }
 
-    function copyNetlist() {
-        const netlist = onExportNetlist();
-        navigator.clipboard.writeText(netlist).then(() => {
-            // You could add a toast notification here if you have one set up
-            console.log('Netlist copied to clipboard');
-        }).catch(err => {
-            console.error('Failed to copy netlist:', err);
-        });
-    }
 
-    function exportNetlist() {
-        const netlist = onExportNetlist();
-        downloadFile(netlist, 'circuit.cir', 'text/plain');
-    }
 
     function exportJSON() {
         const jsonData = onExportJSON();
@@ -618,10 +656,16 @@
     }
 </script>
 
-<div class="w-80 h-full overflow-hidden bg-background border-l border-border flex flex-col">
+<div class="h-full bg-background border-l border-border flex flex-col relative" style="width: {sidebarWidth}px;">
+    <!-- Resize Handle -->
+    <div 
+        class="absolute left-0 top-0 w-2 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-10 select-none resize-handle"
+        onmousedown={startResize}
+        title="Drag to resize panel"
+    ></div>
     <!-- Properties Panel -->
-    <div class="flex-1 flex flex-col">
-        <div class="p-4 border-b border-border">
+    <div class="flex-1 flex flex-col min-h-0">
+        <div class="p-4 border-b border-border flex-shrink-0">
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold text-foreground">Properties</h2>
                 {#if selectedNode}
@@ -632,7 +676,7 @@
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto min-h-0 sidebar-content">
             {#if selectedNode}
                 <div class="p-4 space-y-4">
                     <!-- Component Info Card -->
@@ -681,7 +725,7 @@
                                 {#if fieldData}
                                     {@const sliderValue = fieldData.type === 'slider' ? [fieldData.value] : []}
                                     <div class="space-y-2">
-                                        <Label for={field.key} class="text-xs font-medium">{field.label}</Label>
+                                        <Label for={field.key} class="text-xs font-medium truncate block">{field.label}</Label>
                                         
                                         {#if fieldData.type === 'select'}
                                             <DropdownMenu>
@@ -691,7 +735,7 @@
                                                         <ChevronDown class="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent class="w-full">
+                                                <DropdownMenuContent class="w-[var(--radix-dropdown-menu-trigger-width)]">
                                                     {#each (fieldData.options || []) as option}
                                                         <DropdownMenuItem onclick={() => updateParameter(field.key, String(option))}>
                                                             {option}
@@ -767,18 +811,7 @@
                         </Button>
                     </div>
 
-                    <Separator />
 
-                    <!-- Simulation Controls -->
-                    <div class="space-y-2">
-                        <Button variant="default" size="sm" class="w-full">
-                            <Zap class="w-3 h-3 mr-1" />
-                            Simulate Component
-                        </Button>
-                        <Button variant="outline" size="sm" class="w-full">
-                            View Datasheet
-                        </Button>
-                    </div>
                 </div>
             {:else}
                 <div class="p-4 text-center text-muted-foreground">
@@ -795,18 +828,11 @@
     </div>
 
     <!-- Export Panel -->
-    <div class="border-t border-border">
+    <div class="border-t border-border flex-shrink-0 sidebar-content">
         <div class="p-4">
             <h2 class="text-lg font-semibold text-foreground mb-4">Export</h2>
             
             <div class="space-y-2">
-                <Button size="sm" class="w-full" variant="outline" onclick={copyNetlist}>
-                    <Copy class="w-3 h-3 mr-1" />
-                    Copy Netlist
-                </Button>
-                <Button size="sm" class="w-full" variant="outline" onclick={exportNetlist}>
-                    Export Netlist
-                </Button>
                 <Button size="sm" class="w-full" variant="outline" onclick={exportJSON}>
                     Export JSON
                 </Button>
@@ -814,3 +840,54 @@
         </div>
     </div>
 </div>
+
+
+
+<style>
+    /* Prevent text selection during resize */
+    :global(body.resizing) {
+        user-select: none;
+        cursor: col-resize;
+    }
+    
+    /* Make resize handle more visible */
+    .resize-handle {
+        background: hsl(var(--border));
+        transition: background-color 0.2s ease;
+        border-right: 1px solid hsl(var(--border));
+    }
+    
+    .resize-handle:hover {
+        background: hsl(var(--primary) / 0.5);
+        border-right-color: hsl(var(--primary));
+    }
+    
+    .resize-handle:active {
+        background: hsl(var(--primary));
+        border-right-color: hsl(var(--primary));
+    }
+    
+    /* Prevent horizontal overflow */
+    :global(.overflow-hidden) {
+        overflow: hidden !important;
+    }
+    
+    /* Ensure content doesn't overflow the sidebar */
+    .sidebar-content {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    /* Prevent label overflow */
+    :global(.truncate) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Ensure proper text wrapping for long labels */
+    :global(.text-xs) {
+        word-break: break-word;
+        hyphens: auto;
+    }
+</style>

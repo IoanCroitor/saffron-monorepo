@@ -10,6 +10,40 @@
 	import type { DisplayDataType } from './lib/displayData';
 	import { makeDD } from './lib/displayData';
 	import { getParser } from './lib/parserDC';
+	import { simulationStore } from '../editor/stores/simulation-store';
+	import { Card, CardHeader, CardContent } from '$lib/components/ui/card';
+	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
+	import { 
+		Copy, 
+		Download, 
+		Trash2, 
+		Clock, 
+		Zap, 
+		TrendingUp,
+		CircuitBoard,
+		FileText,
+		CheckCircle,
+		XCircle
+	} from '@lucide/svelte';
+
+	// Functions for simulation results
+	function copyNetlist(netlist: string) {
+		navigator.clipboard.writeText(netlist);
+	}
+
+	function downloadNetlist(netlist: string, name: string) {
+		const blob = new Blob([netlist], { type: 'text/plain' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${name}_netlist.cir`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
 const examples = [
 	{
 		name: 'Fast Series RLC Resonant Circuit',
@@ -460,6 +494,106 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 							/>
 						{/if}
 					</div>
+
+					<!-- Circuit Editor Simulation Results -->
+					<div class="circuit-simulations">
+						<div class="section-header">
+							<h3>Circuit Editor Simulations</h3>
+						</div>
+						
+						{#if $simulationStore.runs.length > 0}
+							<div class="simulation-runs">
+								{#each $simulationStore.runs as run}
+									<Card class="simulation-run-card">
+										<CardHeader class="p-4">
+											<div class="flex items-center justify-between">
+												<div class="flex items-center gap-2">
+													{#if run.type === 'dc'}
+														<TrendingUp class="w-4 h-4 text-blue-500" />
+													{:else if run.type === 'ac'}
+														<Zap class="w-4 h-4 text-green-500" />
+													{:else if run.type === 'transient'}
+														<Clock class="w-4 h-4 text-purple-500" />
+													{/if}
+													<div>
+														<h4 class="text-sm font-semibold">{run.name}</h4>
+														<p class="text-xs text-muted-foreground">
+															{run.type.toUpperCase()} Analysis • {run.timestamp.toLocaleString()}
+														</p>
+													</div>
+												</div>
+												<div class="flex items-center gap-2">
+													<Badge variant={run.result.success ? "default" : "destructive"} class="text-xs">
+														{#if run.result.success}
+															<CheckCircle class="w-3 h-3 mr-1" />
+															Success
+														{:else}
+															<XCircle class="w-3 h-3 mr-1" />
+															Failed
+														{/if}
+													</Badge>
+													<Button 
+														size="sm" 
+														variant="outline" 
+														onclick={() => copyNetlist(run.netlist)}
+														class="h-6 px-2 text-xs"
+													>
+														<Copy class="w-3 h-3 mr-1" />
+														Copy
+													</Button>
+													<Button 
+														size="sm" 
+														variant="outline" 
+														onclick={() => downloadNetlist(run.netlist, run.name)}
+														class="h-6 px-2 text-xs"
+													>
+														<Download class="w-3 h-3 mr-1" />
+														Save
+													</Button>
+													<Button 
+														size="sm" 
+														variant="outline" 
+														onclick={() => simulationStore.removeRun(run.id)}
+														class="h-6 px-2 text-xs text-destructive"
+													>
+														<Trash2 class="w-3 h-3" />
+													</Button>
+												</div>
+											</div>
+										</CardHeader>
+										<CardContent class="p-4 pt-0">
+											{#if run.result.success}
+												<div class="text-xs text-muted-foreground space-y-1">
+													<div><strong>Type:</strong> {run.result.data?.type}</div>
+													<div><strong>Data Points:</strong> {Object.keys(run.result.data?.results || {}).length}</div>
+													<div><strong>Temperature:</strong> {run.config.temperature}°C</div>
+													{#if run.config.voltage}
+														<div><strong>Voltage:</strong> {run.config.voltage}V</div>
+													{/if}
+													{#if run.config.frequency}
+														<div><strong>Frequency:</strong> {run.config.frequency}Hz</div>
+													{/if}
+													{#if run.config.startTime !== undefined}
+														<div><strong>Time Range:</strong> {run.config.startTime}s - {run.config.endTime}s</div>
+													{/if}
+												</div>
+											{:else}
+												<div class="text-xs text-destructive">
+													<strong>Error:</strong> {run.result.error}
+												</div>
+											{/if}
+										</CardContent>
+									</Card>
+								{/each}
+							</div>
+						{:else}
+							<div class="empty-state">
+								<CircuitBoard class="w-8 h-8 text-muted-foreground" />
+								<p class="text-sm text-muted-foreground">No simulation runs yet</p>
+								<p class="text-xs text-muted-foreground">Run simulations from the Circuit Editor to see results here</p>
+							</div>
+						{/if}
+					</div>
 					
 					<div class="control-panel">
 						<DisplayBox 
@@ -836,5 +970,47 @@ vin 1 0 0 pulse (0 1.8 0 0.1 0.1 15 30)
 		.controls {
 			justify-content: space-between;
 		}
+	}
+
+	/* Circuit Editor Simulation Results */
+	.circuit-simulations {
+		margin-top: 2rem;
+		padding-top: 2rem;
+		border-top: 1px solid var(--border-color);
+	}
+
+	.simulation-runs {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+
+	.simulation-run-card {
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-primary);
+		transition: all 0.2s ease;
+	}
+
+	.simulation-run-card:hover {
+		border-color: var(--accent-color);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 3rem 2rem;
+		text-align: center;
+		border: 2px dashed var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-secondary);
+	}
+
+	.empty-state > * + * {
+		margin-top: 0.5rem;
 	}
 </style>
