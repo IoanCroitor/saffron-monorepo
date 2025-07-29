@@ -76,6 +76,7 @@
 					Simulator
 				</a>
 				<a href="/scan" class="hover:text-primary text-sm font-medium transition-colors"> Scan </a>
+				<a href="/ai-simulator" class="hover:text-primary text-sm font-medium transition-colors"> AI Simulator </a>
 				{#if session}
 					<a href="/dashboard" class="hover:text-primary text-sm font-medium transition-colors">
 						Dashboard
@@ -178,6 +179,12 @@
 									class="hover:bg-accent hover:text-accent-foreground block px-3 py-2 text-sm"
 								>
 									Scan
+								</a>
+								<a
+									href="/ai-simulator"
+									class="hover:bg-accent hover:text-accent-foreground block px-3 py-2 text-sm"
+								>
+									AI Simulator
 								</a>
 								<a
 									href="/dashboard"
