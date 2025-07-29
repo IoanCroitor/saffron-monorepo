@@ -70,14 +70,4 @@ npm run preview
 - [Documentație Circuit Recognition (DeepWiki)](https://deepwiki.com/IoanCroitor/circuitrecognition/)
 - [Documentație HTTR (DeepWiki)](https://deepwiki.com/IoanCroitor/HTTR)
 
----
 
-## Contribuie & Contact
-
-Oricine este binevenit să contribuie! Pentru bug-uri sau propuneri, folosiți [Issues](https://github.com/IoanCroitor/saffron-monorepo/issues) sau deschideți un Pull Request.
-
-**Autor:** Ioan Croitor  
-**Email:** ioan.croitor@example.com  
-**Data actualizării:** 29 iulie 2025
-
----
